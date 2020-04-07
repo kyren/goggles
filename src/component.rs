@@ -8,10 +8,7 @@ use std::{
 
 use hibitset::{BitIter, BitSet, BitSetLike};
 
-use crate::{
-    entity::Index,
-    join::{Join, JoinConstraint},
-};
+use crate::{entity::Index, join::Join};
 
 pub trait Component: Any + Sized {
     type Storage: RawStorage<Self> + Any;
@@ -204,8 +201,8 @@ impl<'a, C: Component> Join for &'a MaskedStorage<C> {
     type Access = &'a C::Storage;
     type Mask = &'a BitSet;
 
-    fn open(self) -> (Self::Mask, Self::Access, JoinConstraint) {
-        (&self.mask, &self.storage, JoinConstraint::Constrained)
+    fn open(self) -> (Self::Mask, Self::Access) {
+        (&self.mask, &self.storage)
     }
 
     unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {
@@ -218,8 +215,8 @@ impl<'a, C: Component> Join for &'a mut MaskedStorage<C> {
     type Access = &'a C::Storage;
     type Mask = &'a BitSet;
 
-    fn open(self) -> (Self::Mask, Self::Access, JoinConstraint) {
-        (&self.mask, &self.storage, JoinConstraint::Constrained)
+    fn open(self) -> (Self::Mask, Self::Access) {
+        (&self.mask, &self.storage)
     }
 
     unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {

@@ -20,8 +20,8 @@ please continue to use it.
 The basic data structure design is very, very close to specs, it uses the same
 basic data structures that specs does to store components and do joins.  Just
 like specs, it stores components in separate storages and records their presense
-with a sparse bitset type from `hibitset`, and uses that same sparse bitset to
-do joins.
+with a hierarchial bitset type from `hibitset`, and uses that same hierarchial
+bitset to do joins.
 
 On top of this, howeer, is a much more minimal, piecemeal API than even specs
 provides.  It removes everything that I feel is extraneous or magical, and only
@@ -60,7 +60,7 @@ The library contains a set of more or less independent parts:
    it depends on the `join` module for this.
 
 5) The `entity` module contains an atomic generational index allocator that also
-   uses `hibitset` sparse BitSet types to track which indexes are alive.
+   uses `hibitset` BitSet types to track which indexes are alive.
    
 6) The `world` module ties the `resource_set`, `join`, `component`, and `entity`
    modules together into something that can be used to store resources and

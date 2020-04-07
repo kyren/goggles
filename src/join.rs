@@ -1,39 +1,20 @@
-use hibitset::{BitIter, BitProducer, BitSetAll, BitSetAnd, BitSetLike};
+use hibitset::{
+    AtomicBitSet, BitIter, BitProducer, BitSet, BitSetAll, BitSetAnd, BitSetLike, BitSetNot,
+    BitSetOr, BitSetXor,
+};
 use rayon::iter::{
     plumbing::{bridge_unindexed, Folder, UnindexedConsumer, UnindexedProducer},
     ParallelIterator,
 };
-use thiserror::Error;
 
 use crate::entity::Index;
-
-#[derive(Debug, Error)]
-#[error("cannot iterate over unconstrained Join")]
-pub struct JoinIterUnconstrained;
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
-pub enum JoinConstraint {
-    Constrained,
-    Unconstrained,
-}
-
-impl JoinConstraint {
-    #[inline]
-    pub fn and(self, other: JoinConstraint) -> JoinConstraint {
-        if self == JoinConstraint::Unconstrained && other == JoinConstraint::Unconstrained {
-            JoinConstraint::Unconstrained
-        } else {
-            JoinConstraint::Constrained
-        }
-    }
-}
 
 pub trait Join {
     type Item;
     type Access;
     type Mask: BitSetLike;
 
-    fn open(self) -> (Self::Mask, Self::Access, JoinConstraint);
+    fn open(self) -> (Self::Mask, Self::Access);
     unsafe fn get(access: &Self::Access, index: Index) -> Self::Item;
 }
 
@@ -42,7 +23,7 @@ pub trait JoinExt: Join {
     where
         Self: Sized,
     {
-        JoinIter::new(self).unwrap()
+        JoinIter::new(self)
     }
 
     fn par_join(self) -> JoinParIter<Self>
@@ -52,7 +33,7 @@ pub trait JoinExt: Join {
         Self::Access: Send + Sync,
         Self::Mask: Send + Sync,
     {
-        JoinParIter::new(self).unwrap()
+        JoinParIter::new(self)
     }
 
     fn maybe(self) -> MaybeJoin<Self>
@@ -72,9 +53,9 @@ impl<J: Join> Join for MaybeJoin<J> {
     type Access = (J::Mask, J::Access);
     type Mask = BitSetAll;
 
-    fn open(self) -> (Self::Mask, Self::Access, JoinConstraint) {
-        let (mask, access, _) = self.0.open();
-        (BitSetAll, (mask, access), JoinConstraint::Unconstrained)
+    fn open(self) -> (Self::Mask, Self::Access) {
+        let (mask, access) = self.0.open();
+        (BitSetAll, (mask, access))
     }
 
     unsafe fn get((mask, access): &Self::Access, index: Index) -> Self::Item {
@@ -89,13 +70,9 @@ impl<J: Join> Join for MaybeJoin<J> {
 pub struct JoinIter<J: Join>(BitIter<J::Mask>, J::Access);
 
 impl<J: Join> JoinIter<J> {
-    pub fn new(j: J) -> Result<Self, JoinIterUnconstrained> {
-        let (mask, access, constraint) = j.open();
-        if constraint == JoinConstraint::Unconstrained {
-            Err(JoinIterUnconstrained)
-        } else {
-            Ok(Self(mask.iter(), access))
-        }
+    pub fn new(j: J) -> Self {
+        let (mask, access) = j.open();
+        Self(mask.iter(), access)
     }
 }
 
@@ -110,13 +87,9 @@ impl<J: Join> Iterator for JoinIter<J> {
 pub struct JoinParIter<J: Join>(J::Mask, J::Access);
 
 impl<J: Join> JoinParIter<J> {
-    pub fn new(j: J) -> Result<Self, JoinIterUnconstrained> {
-        let (mask, access, constraint) = j.open();
-        if constraint == JoinConstraint::Unconstrained {
-            Err(JoinIterUnconstrained)
-        } else {
-            Ok(Self(mask, access))
-        }
+    pub fn new(j: J) -> Self {
+        let (mask, access) = j.open();
+        Self(mask, access)
     }
 }
 
@@ -203,14 +176,13 @@ macro_rules! define_join {
             type Mask = <(<$first as Join>::Mask, $(<$rest as Join>::Mask),*) as BitAnd>::Value;
 
             #[allow(non_snake_case)]
-            fn open(self) -> (Self::Mask, Self::Access, JoinConstraint) {
+            fn open(self) -> (Self::Mask, Self::Access) {
                 let ($first, $($rest),*) = self;
                 let ($first, $($rest),*) = ($first.open(), $($rest.open()),*);
 
                 let mask = ($first.0, $($rest.0),*).and();
                 let access = ($first.1, $($rest.1),*);
-                let constraint = $first.2$(.and($rest.2))*;
-                (mask, access, constraint)
+                (mask, access)
             }
 
             #[allow(non_snake_case)]
@@ -312,3 +284,36 @@ define_bit_and! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, 
 define_bit_and! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X}
 define_bit_and! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y}
 define_bit_and! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z}
+
+macro_rules! define_bit_join {
+    (impl <$($lifetime:lifetime)? $(,)? $($arg:ident),*> for $bitset:ty) => {
+        impl<$($lifetime,)* $($arg),*> Join for $bitset
+            where $($arg: BitSetLike),*
+        {
+            type Item = Index;
+            type Access = ();
+            type Mask = Self;
+
+            fn open(self) -> (Self::Mask, Self::Access) {
+                (self, ())
+            }
+
+            unsafe fn get(_: &Self::Access, index: Index) -> Self::Item {
+                index
+            }
+        }
+    }
+}
+
+define_bit_join!(impl<> for BitSet);
+define_bit_join!(impl<'a> for &'a BitSet);
+define_bit_join!(impl<> for AtomicBitSet);
+define_bit_join!(impl<'a> for &'a AtomicBitSet);
+define_bit_join!(impl<A> for BitSetNot<A>);
+define_bit_join!(impl<'a, A> for &'a BitSetNot<A>);
+define_bit_join!(impl<A, B> for BitSetAnd<A, B>);
+define_bit_join!(impl<'a, A, B> for &'a BitSetAnd<A, B>);
+define_bit_join!(impl<A, B> for BitSetOr<A, B>);
+define_bit_join!(impl<'a, A, B> for &'a BitSetOr<A, B>);
+define_bit_join!(impl<A, B> for BitSetXor<A, B>);
+define_bit_join!(impl<'a> for &'a dyn BitSetLike);
