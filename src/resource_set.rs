@@ -2,6 +2,7 @@ use std::{
     any::{type_name, Any, TypeId},
     collections::HashMap,
     iter,
+    ops::{Deref, DerefMut},
 };
 
 use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
@@ -104,7 +105,7 @@ impl ResourceSet {
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ResourceId(TypeId);
 
-pub struct Read<'a, T>(pub AtomicRef<'a, T>);
+pub struct Read<'a, T>(AtomicRef<'a, T>);
 
 impl<'a, T> SystemData<'a> for Read<'a, T>
 where
@@ -125,7 +126,15 @@ where
     }
 }
 
-pub struct Write<'a, T>(pub AtomicRefMut<'a, T>);
+impl<'a, T> Deref for Read<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &*self.0
+    }
+}
+
+pub struct Write<'a, T>(AtomicRefMut<'a, T>);
 
 impl<'a, T> SystemData<'a> for Write<'a, T>
 where
@@ -143,6 +152,20 @@ where
 
     fn fetch(set: &'a ResourceSet) -> Self {
         Write(set.borrow_mut())
+    }
+}
+
+impl<'a, T> Deref for Write<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &*self.0
+    }
+}
+
+impl<'a, T> DerefMut for Write<'a, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        &mut *self.0
     }
 }
 

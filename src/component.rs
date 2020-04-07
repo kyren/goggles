@@ -160,6 +160,10 @@ impl<C: Component> MaskedStorage<C> {
         &mut self.storage
     }
 
+    pub fn contains(&self, index: Index) -> bool {
+        self.mask.contains(index)
+    }
+
     pub fn get(&self, index: Index) -> Option<&C> {
         if self.mask.contains(index) {
             Some(unsafe { &*self.storage.ptr(index) })
