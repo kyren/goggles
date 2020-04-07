@@ -5,3 +5,4 @@ Cargo.lock
 .#*
 .envrc
 shell.nix
+.dir-locals.el
