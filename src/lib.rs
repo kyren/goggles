@@ -4,3 +4,4 @@ pub mod join;
 pub mod make_sync;
 pub mod par_seq;
 pub mod resource_set;
+pub mod world;

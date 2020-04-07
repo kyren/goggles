@@ -38,6 +38,13 @@ impl ResourceSet {
             })
     }
 
+    pub fn contains<T>(&self) -> bool
+    where
+        T: Any + Send + 'static,
+    {
+        self.resources.contains_key(&Resource::<T>::id())
+    }
+
     pub fn remove<T>(&mut self) -> Option<T>
     where
         T: Any + Send + 'static,
@@ -50,64 +57,42 @@ impl ResourceSet {
         })
     }
 
-    /// Try to borrow the given resource immutably.
-    ///
-    /// If the resource does not exist, returns None.
-    ///
-    /// # Panics
-    /// Panics if the resource is already borrowed mutably.
-    pub fn try_fetch<T>(&self) -> Option<AtomicRef<T>>
-    where
-        T: Any + Send + Sync + 'static,
-    {
-        self.resources.get(&Resource::<T>::id()).map(|r| {
-            AtomicRef::map(r.borrow(), |r| {
-                r.downcast_ref::<Resource<T>>().unwrap().get()
-            })
-        })
-    }
-
     /// Borrow the given resource immutably.
     ///
     /// # Panics
     /// Panics if the resource has not been inserted or is already borrowed mutably.
-    pub fn fetch<T>(&self) -> AtomicRef<T>
+    pub fn borrow<T>(&self) -> AtomicRef<T>
     where
         T: Any + Send + Sync + 'static,
     {
-        self.try_fetch().expect("no such resource")
-    }
-
-    /// Try to borrow the given resource mutably.
-    ///
-    /// If the resource does not exist, returns None.
-    ///
-    /// # Panics
-    /// Panics if the resource is already borrowed.
-    pub fn try_fetch_mut<T>(&self) -> Option<AtomicRefMut<T>>
-    where
-        T: Any + Send + 'static,
-    {
-        self.resources.get(&Resource::<T>::id()).map(|r| {
-            AtomicRefMut::map(r.borrow_mut(), |r| {
-                r.downcast_mut::<Resource<T>>().unwrap().get_mut()
+        if let Some(r) = self.resources.get(&Resource::<T>::id()) {
+            AtomicRef::map(r.borrow(), |r| {
+                r.downcast_ref::<Resource<T>>().unwrap().get()
             })
-        })
+        } else {
+            panic!("no such resource {:?}", type_name::<T>());
+        }
     }
 
     /// Borrow the given resource mutably.
     ///
     /// # Panics
     /// Panics if the resource has not been inserted or is already borrowed.
-    pub fn fetch_mut<T>(&self) -> AtomicRefMut<T>
+    pub fn borrow_mut<T>(&self) -> AtomicRefMut<T>
     where
         T: Any + Send + 'static,
     {
-        self.try_fetch_mut().expect("no such resource")
+        if let Some(r) = self.resources.get(&Resource::<T>::id()) {
+            AtomicRefMut::map(r.borrow_mut(), |r| {
+                r.downcast_mut::<Resource<T>>().unwrap().get_mut()
+            })
+        } else {
+            panic!("no such resource {:?}", type_name::<T>());
+        }
     }
 
     /// Fetch the given `SystemData`.
-    pub fn system_data<'a, S>(&'a self) -> S
+    pub fn fetch<'a, S>(&'a self) -> S
     where
         S: SystemData<'a>,
     {
@@ -118,33 +103,6 @@ impl ResourceSet {
 #[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ResourceId(TypeId);
 
-struct Resource<T>(MakeSync<T>);
-
-impl<T: Any> Resource<T> {
-    fn id() -> ResourceId {
-        ResourceId(TypeId::of::<T>())
-    }
-
-    fn new(t: T) -> Resource<T> {
-        Resource(MakeSync::new(t))
-    }
-
-    fn into_inner(self) -> T {
-        self.0.into_inner()
-    }
-
-    fn get(&self) -> &T
-    where
-        T: Sync,
-    {
-        self.0.get()
-    }
-
-    fn get_mut(&mut self) -> &mut T {
-        self.0.get_mut()
-    }
-}
-
 /// A trait for statically defining mutable and immutable resources from a `ResourceSet` for use
 /// with the `par_seq` module.
 ///
@@ -153,24 +111,6 @@ impl<T: Any> Resource<T> {
 pub trait SystemData<'a> {
     fn check_resources() -> Result<RwResources<TypeId>, ResourceConflict>;
     fn fetch(set: &'a ResourceSet) -> Self;
-}
-
-pub struct TryRead<'a, T>(AtomicRef<'a, T>);
-
-impl<'a, T> SystemData<'a> for Option<TryRead<'a, T>>
-where
-    T: Any + Send + Sync + 'static,
-{
-    fn check_resources() -> Result<RwResources<TypeId>, ResourceConflict> {
-        Ok(RwResources::from_iters(
-            iter::once(TypeId::of::<T>()),
-            iter::empty(),
-        ))
-    }
-
-    fn fetch(set: &'a ResourceSet) -> Self {
-        Some(TryRead(set.try_fetch()?))
-    }
 }
 
 pub struct Read<'a, T>(AtomicRef<'a, T>);
@@ -187,25 +127,7 @@ where
     }
 
     fn fetch(set: &'a ResourceSet) -> Self {
-        Read(set.fetch())
-    }
-}
-
-pub struct TryWrite<'a, T>(AtomicRefMut<'a, T>);
-
-impl<'a, T> SystemData<'a> for Option<TryWrite<'a, T>>
-where
-    T: Any + Send + 'static,
-{
-    fn check_resources() -> Result<RwResources<TypeId>, ResourceConflict> {
-        Ok(RwResources::from_iters(
-            iter::empty(),
-            iter::once(TypeId::of::<T>()),
-        ))
-    }
-
-    fn fetch(set: &'a ResourceSet) -> Self {
-        Some(TryWrite(set.try_fetch_mut()?))
+        Read(set.borrow())
     }
 }
 
@@ -223,7 +145,7 @@ where
     }
 
     fn fetch(set: &'a ResourceSet) -> Self {
-        Write(set.fetch_mut())
+        Write(set.borrow_mut())
     }
 }
 
@@ -278,29 +200,29 @@ impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, 
 impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y);
 impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+struct Resource<T>(MakeSync<T>);
 
-    #[test]
-    fn test_system_data() {
-        struct A;
-        struct B;
-        struct C;
-
-        let mut res = ResourceSet::new();
-        res.insert(A);
-        res.insert(B);
-        res.insert(C);
-
-        let _sys_data = res.system_data::<(Read<A>, Write<B>, Write<C>)>();
+impl<T: Any> Resource<T> {
+    fn id() -> ResourceId {
+        ResourceId(TypeId::of::<T>())
     }
 
-    #[test]
-    fn test_conflicts() {
-        struct A;
-        struct B;
+    fn new(t: T) -> Resource<T> {
+        Resource(MakeSync::new(t))
+    }
 
-        assert!(<(Read<A>, Read<B>, Write<A>)>::check_resources().is_err());
+    fn into_inner(self) -> T {
+        self.0.into_inner()
+    }
+
+    fn get(&self) -> &T
+    where
+        T: Sync,
+    {
+        self.0.get()
+    }
+
+    fn get_mut(&mut self) -> &mut T {
+        self.0.get_mut()
     }
 }
