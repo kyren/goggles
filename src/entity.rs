@@ -8,6 +8,8 @@ use std::{
 use hibitset::{AtomicBitSet, BitSet, BitSetLike, BitSetOr};
 use thiserror::Error;
 
+use crate::join::Join;
+
 #[derive(Debug, Error)]
 #[error("Entity is no longer alive or has a mismatched generation")]
 pub struct WrongGeneration;
@@ -119,6 +121,8 @@ impl Entity {
         }
     }
 }
+
+pub type LiveBitSet<'a> = BitSetOr<&'a BitSet, &'a AtomicBitSet>;
 
 #[derive(Debug, Default)]
 pub struct Allocator {
@@ -257,7 +261,7 @@ impl Allocator {
     ///
     /// This is a `BitSetOr` of the non-atomically live entities and the atomically live entities.
     #[inline]
-    pub fn live_bitset(&self) -> BitSetOr<&BitSet, &AtomicBitSet> {
+    pub fn live_bitset(&self) -> LiveBitSet {
         BitSetOr(&self.alive, &self.raised_atomic)
     }
 
@@ -293,6 +297,20 @@ impl Allocator {
         self.killed_atomic.clear();
 
         self.cache.extend(killed.iter().map(|e| e.index));
+    }
+}
+
+impl<'a> Join for &'a Allocator {
+    type Item = Entity;
+    type Access = &'a Allocator;
+    type Mask = LiveBitSet<'a>;
+
+    fn open(self) -> (Self::Mask, Self::Access) {
+        (self.live_bitset(), self)
+    }
+
+    unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {
+        Entity::new(index, access.generation(index).raised())
     }
 }
 

@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     cell::UnsafeCell,
     collections::HashMap,
     mem::{self, MaybeUninit},
@@ -10,8 +9,8 @@ use hibitset::{BitIter, BitSet, BitSetLike};
 
 use crate::{entity::Index, join::Join};
 
-pub trait Component: Any + Sized {
-    type Storage: RawStorage<Self> + Any;
+pub trait Component: Sized {
+    type Storage: RawStorage<Self>;
 }
 
 pub trait RawStorage<C> {
