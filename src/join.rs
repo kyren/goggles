@@ -6,6 +6,7 @@ use rayon::iter::{
     plumbing::{bridge_unindexed, Folder, UnindexedConsumer, UnindexedProducer},
     ParallelIterator,
 };
+use thiserror::Error;
 
 use crate::entity::Index;
 
@@ -18,12 +19,24 @@ pub trait Join {
     unsafe fn get(access: &Self::Access, index: Index) -> Self::Item;
 }
 
+#[derive(Debug, Error)]
+#[error("cannot iterate over unconstrained Join")]
+pub struct JoinIterUnconstrained;
+
 pub trait JoinExt: Join {
     fn join(self) -> JoinIter<Self>
     where
         Self: Sized,
+        Self::Mask: BitSetConstrained,
     {
-        JoinIter::new(self)
+        JoinIter::new(self).unwrap()
+    }
+
+    fn join_unconstrained(self) -> JoinIter<Self>
+    where
+        Self: Sized,
+    {
+        JoinIter::new_unconstrained(self)
     }
 
     fn par_join(self) -> JoinParIter<Self>
@@ -31,9 +44,19 @@ pub trait JoinExt: Join {
         Self: Sized + Send,
         Self::Item: Send,
         Self::Access: Send + Sync,
+        Self::Mask: BitSetConstrained + Send + Sync,
+    {
+        JoinParIter::new(self).unwrap()
+    }
+
+    fn par_join_unconstrained(self) -> JoinParIter<Self>
+    where
+        Self: Sized + Send,
+        Self::Item: Send,
+        Self::Access: Send + Sync,
         Self::Mask: Send + Sync,
     {
-        JoinParIter::new(self)
+        JoinParIter::new_unconstrained(self)
     }
 
     fn maybe(self) -> MaybeJoin<Self>
@@ -70,7 +93,19 @@ impl<J: Join> Join for MaybeJoin<J> {
 pub struct JoinIter<J: Join>(BitIter<J::Mask>, J::Access);
 
 impl<J: Join> JoinIter<J> {
-    pub fn new(j: J) -> Self {
+    pub fn new(j: J) -> Result<Self, JoinIterUnconstrained>
+    where
+        J::Mask: BitSetConstrained,
+    {
+        let (mask, access) = j.open();
+        if mask.is_constrained() {
+            Ok(Self(mask.iter(), access))
+        } else {
+            Err(JoinIterUnconstrained)
+        }
+    }
+
+    pub fn new_unconstrained(j: J) -> Self {
         let (mask, access) = j.open();
         Self(mask.iter(), access)
     }
@@ -87,7 +122,19 @@ impl<J: Join> Iterator for JoinIter<J> {
 pub struct JoinParIter<J: Join>(J::Mask, J::Access);
 
 impl<J: Join> JoinParIter<J> {
-    pub fn new(j: J) -> Self {
+    pub fn new(j: J) -> Result<Self, JoinIterUnconstrained>
+    where
+        J::Mask: BitSetConstrained,
+    {
+        let (mask, access) = j.open();
+        if mask.is_constrained() {
+            Ok(Self(mask, access))
+        } else {
+            Err(JoinIterUnconstrained)
+        }
+    }
+
+    pub fn new_unconstrained(j: J) -> Self {
         let (mask, access) = j.open();
         Self(mask, access)
     }
@@ -309,6 +356,8 @@ define_bit_join!(impl<> for BitSet);
 define_bit_join!(impl<'a> for &'a BitSet);
 define_bit_join!(impl<> for AtomicBitSet);
 define_bit_join!(impl<'a> for &'a AtomicBitSet);
+define_bit_join!(impl<> for BitSetAll);
+define_bit_join!(impl<'a> for &'a BitSetAll);
 define_bit_join!(impl<A> for BitSetNot<A>);
 define_bit_join!(impl<'a, A> for &'a BitSetNot<A>);
 define_bit_join!(impl<A, B> for BitSetAnd<A, B>);
@@ -317,3 +366,68 @@ define_bit_join!(impl<A, B> for BitSetOr<A, B>);
 define_bit_join!(impl<'a, A, B> for &'a BitSetOr<A, B>);
 define_bit_join!(impl<A, B> for BitSetXor<A, B>);
 define_bit_join!(impl<'a> for &'a dyn BitSetLike);
+
+pub trait BitSetConstrained: BitSetLike {
+    fn is_constrained(&self) -> bool;
+}
+
+impl<'a, B: BitSetConstrained> BitSetConstrained for &'a B {
+    fn is_constrained(&self) -> bool {
+        (*self).is_constrained()
+    }
+}
+
+macro_rules! define_bit_constrained {
+    ($bitset:ty) => {
+        impl BitSetConstrained for $bitset {
+            fn is_constrained(&self) -> bool {
+                true
+            }
+        }
+    };
+}
+
+define_bit_constrained!(BitSet);
+define_bit_constrained!(AtomicBitSet);
+
+impl BitSetConstrained for BitSetAll {
+    fn is_constrained(&self) -> bool {
+        false
+    }
+}
+
+impl<A: BitSetConstrained> BitSetConstrained for BitSetNot<A> {
+    fn is_constrained(&self) -> bool {
+        !self.0.is_constrained()
+    }
+}
+
+impl<A, B> BitSetConstrained for BitSetAnd<A, B>
+where
+    A: BitSetConstrained,
+    B: BitSetConstrained,
+{
+    fn is_constrained(&self) -> bool {
+        self.0.is_constrained() || self.1.is_constrained()
+    }
+}
+
+impl<A, B> BitSetConstrained for BitSetOr<A, B>
+where
+    A: BitSetConstrained,
+    B: BitSetConstrained,
+{
+    fn is_constrained(&self) -> bool {
+        self.0.is_constrained() && self.1.is_constrained()
+    }
+}
+
+impl<A, B> BitSetConstrained for BitSetXor<A, B>
+where
+    A: BitSetConstrained,
+    B: BitSetConstrained,
+{
+    fn is_constrained(&self) -> bool {
+        self.0.is_constrained() && self.1.is_constrained()
+    }
+}
