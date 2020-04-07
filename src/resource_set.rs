@@ -8,7 +8,8 @@ use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 
 use crate::{
     make_sync::MakeSync,
-    par_seq::{ResourceConflict, Resources, RwResources},
+    par_seq::{ResourceConflict, RwResources},
+    system_data::SystemData,
 };
 
 #[derive(Default)]
@@ -94,34 +95,27 @@ impl ResourceSet {
     /// Fetch the given `SystemData`.
     pub fn fetch<'a, S>(&'a self) -> S
     where
-        S: SystemData<'a>,
+        S: SystemData<'a, Source = ResourceSet, Resources = RwResources<ResourceId>>,
     {
         S::fetch(self)
     }
 }
 
-#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ResourceId(TypeId);
 
-/// A trait for statically defining mutable and immutable resources from a `ResourceSet` for use
-/// with the `par_seq` module.
-///
-/// `SystemData` can be a `Read` or a `Write` of any resource type, as well as a tuple of inner
-/// types which implement `SystemData` and do not have conflicting resource requirements.
-pub trait SystemData<'a> {
-    fn check_resources() -> Result<RwResources<TypeId>, ResourceConflict>;
-    fn fetch(set: &'a ResourceSet) -> Self;
-}
-
-pub struct Read<'a, T>(AtomicRef<'a, T>);
+pub struct Read<'a, T>(pub AtomicRef<'a, T>);
 
 impl<'a, T> SystemData<'a> for Read<'a, T>
 where
     T: Any + Send + Sync + 'static,
 {
-    fn check_resources() -> Result<RwResources<TypeId>, ResourceConflict> {
+    type Source = ResourceSet;
+    type Resources = RwResources<ResourceId>;
+
+    fn check_resources() -> Result<RwResources<ResourceId>, ResourceConflict> {
         Ok(RwResources::from_iters(
-            iter::once(TypeId::of::<T>()),
+            iter::once(Resource::<T>::id()),
             iter::empty(),
         ))
     }
@@ -131,16 +125,19 @@ where
     }
 }
 
-pub struct Write<'a, T>(AtomicRefMut<'a, T>);
+pub struct Write<'a, T>(pub AtomicRefMut<'a, T>);
 
 impl<'a, T> SystemData<'a> for Write<'a, T>
 where
     T: Any + Send + 'static,
 {
-    fn check_resources() -> Result<RwResources<TypeId>, ResourceConflict> {
+    type Source = ResourceSet;
+    type Resources = RwResources<ResourceId>;
+
+    fn check_resources() -> Result<RwResources<ResourceId>, ResourceConflict> {
         Ok(RwResources::from_iters(
             iter::empty(),
-            iter::once(TypeId::of::<T>()),
+            iter::once(Resource::<T>::id()),
         ))
     }
 
@@ -148,57 +145,6 @@ where
         Write(set.borrow_mut())
     }
 }
-
-macro_rules! impl_data {
-    ($($ty:ident),*) => {
-        impl<'a, $($ty),*> SystemData<'a> for ($($ty,)*)
-            where $($ty: SystemData<'a>),*
-            {
-                fn check_resources() -> Result<RwResources<TypeId>, ResourceConflict> {
-                    let mut resources = RwResources::default();
-                    $({
-                        let r = <$ty as SystemData>::check_resources()?;
-                        if resources.conflicts_with(&r) {
-                            return Err(ResourceConflict { type_name: type_name::<Self>() });
-                        }
-                        resources.union(&r);
-                    })*
-                    Ok(resources)
-                }
-
-                fn fetch(world: &'a ResourceSet) -> Self {
-                    ($(<$ty as SystemData<'a>>::fetch(world),)*)
-                }
-            }
-    };
-}
-
-impl_data!(A);
-impl_data!(A, B);
-impl_data!(A, B, C);
-impl_data!(A, B, C, D);
-impl_data!(A, B, C, D, E);
-impl_data!(A, B, C, D, E, F);
-impl_data!(A, B, C, D, E, F, G);
-impl_data!(A, B, C, D, E, F, G, H);
-impl_data!(A, B, C, D, E, F, G, H, I);
-impl_data!(A, B, C, D, E, F, G, H, I, J);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y);
-impl_data!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
 struct Resource<T>(MakeSync<T>);
 

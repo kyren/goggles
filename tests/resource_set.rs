@@ -1,4 +1,4 @@
-use goggles::resource_set::{Read, ResourceSet, SystemData, Write};
+use goggles::resource_set::{FetchResources, Read, ResourceSet, Write};
 
 #[test]
 fn test_system_data() {
