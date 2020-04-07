@@ -19,11 +19,11 @@ please continue to use it.
 
 The basic data structure design is very, very close to specs, it uses the same
 basic data structures that specs does to store components and do joins.  Just
-like specs, it stores components in separate storages and records their presense
-with a hierarchial bitset type from `hibitset`, and uses that same hierarchial
+like specs, it stores components in separate storages and records their presence
+with a hierarchal bitset type from `hibitset`, and uses that same hierarchal
 bitset to do joins.
 
-On top of this, howeer, is a much more minimal, piecemeal API than even specs
+On top of this, however, is a much more minimal, piecemeal API than even specs
 provides.  It removes everything that I feel is extraneous or magical, and only
 tries to handle what is very *hard* to do otherwise or is unsafe, and leaves the
 easier parts to the user to design themselves.
@@ -39,7 +39,7 @@ The library contains a set of more or less independent parts:
 
 2) The `resource_set` module defines a `ResourceSet` which is similar to an
    `AnyMap` with values stored in a `RwLock`.  It doesn't ever block, instead it
-   simply panics when aliasing rules are violated.  It is desigend so that you
+   simply panics when aliasing rules are violated.  It is designed so that you
    can use the `par_seq` module to build systems that operate over the defined
    resources.  It also includes convenient types for defining and requesting
    sets of read / write handles to resources in tuples like `(Read<ResourceA>,
@@ -56,7 +56,7 @@ The library contains a set of more or less independent parts:
    component storage based on `u32` indexes that must be paired with a `BitSet`
    to keep track of what components are present and what are not.  The
    `MaskedStorage` provides this pairing and is a safe interface to a
-   `RawStorage` paired with a `BitSet`.  `MaskedStorage` is also joinable, and
+   `RawStorage` paired with a `BitSet`.  `MaskedStorage` is also join-able, and
    it depends on the `join` module for this.
 
 5) The `entity` module contains an atomic generational index allocator that also
@@ -97,4 +97,4 @@ functionality that is present in both this library and `specs`:
 5) The individual parts of the library go out of their way to be more loosely
    coupled, at the cost of convenience.
 5) More of the internals are public in case you need to build a different
-   abstration.
+   abstraction.
