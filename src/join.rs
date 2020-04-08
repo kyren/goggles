@@ -17,8 +17,18 @@ pub trait Join {
 
     fn open(self) -> (Self::Mask, Self::Access);
 
+    /// Get a value out of the access type returned from `open`.
+    ///
     /// MUST be called only with indexes which are present in the mask returned along with the
-    /// access value from `Join::open`.
+    /// access value from `open`.
+    ///
+    /// You must *only* allow one `Self::Item` for a given index to be alive at any given time.  It
+    /// is allowed for a `Join` impl to have `Item` be a mutable reference that would alias if `get`
+    /// were called multiple times on the same index.
+    ///
+    /// A simpler, more restrictive version of this rule that all of the uses of `Join` impls
+    /// currently follow is that `Join::get` may only be called once per index for a given `Access`
+    /// object.
     unsafe fn get(access: &Self::Access, index: Index) -> Self::Item;
 }
 
@@ -99,6 +109,8 @@ impl<J: Join> Join for MaybeJoin<J> {
     }
 
     unsafe fn get((mask, access): &Self::Access, index: Index) -> Self::Item {
+        // Aliasing requirements must be upheld by the caller, but we ensure that no invalid index
+        // is passed to our inner `Join`.
         if mask.contains(index) {
             Some(J::get(access, index))
         } else {
@@ -132,6 +144,9 @@ impl<J: Join> Iterator for JoinIter<J> {
     type Item = J::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
+        // `JoinIter` only implements `Iterator`, so we only call `J::get` *once* for each index
+        // that is returned from `BitIter`.  Since `BitIter` iterates over the correct mask and ond
+        // does not return repeat indexes, our requirements are upheld.
         self.0.next().map(|index| unsafe { J::get(&self.1, index) })
     }
 }
@@ -222,8 +237,11 @@ where
         F: Folder<Self::Item>,
     {
         let JoinProducer { producer, access } = self;
-        let iter = producer.0.map(|idx| unsafe { J::get(access, idx) });
-        folder.consume_iter(iter)
+        // All of the indexes here are ultimately derived from the mask returned by J::open, so we
+        // know they are valid.  Each `JoinProducer` has a *distinct* subset of the valid indexes,
+        // and we only fold over each index that this `JoinProducer` owns *once*, so we uphold the
+        // aliasing requirements.
+        folder.consume_iter(producer.0.map(|idx| unsafe { J::get(access, idx) }))
     }
 }
 

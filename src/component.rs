@@ -13,9 +13,36 @@ pub trait Component: Sized {
     type Storage: RawStorage<Self>;
 }
 
+/// A trait for storing components in memory based on low valued indexes.
+///
+/// Is not required to keep track of whether the component is present or not for a given index, it
+/// is up to the user of a `RawStorage` to keep track of this.
+///
+/// Because of this, a type that implements `RawStorage` is allowed to leak *all* component values
+/// on drop.  In order to prevent this, the storage must have only empty indexes at the time of
+/// drop.
 pub trait RawStorage<C> {
+    /// Return a pointer to the component at the given index.
+    ///
+    /// You *must* only call `ptr` with index values that are non-empty (have been previously had
+    /// components inserted with `insert`).
+    ///
+    /// Returns a *mutable* pointer to the previously inserted component.  You must follow Rust's
+    /// aliasing rules when dereferencing this pointer, so you must not let multiple `&mut`
+    /// references to the same component be alive at once.  You must also *not* call `insert` or
+    /// `remove` on this index if there is a live reference to the component.
     unsafe fn ptr(&self, index: Index) -> *mut C;
+
+    /// Insert a new component value in the given index.
+    ///
+    /// You must only call `insert` on indexes that are empty.  All indexes start empty, but become
+    /// non-empty once `insert` is called on them.
     unsafe fn insert(&mut self, index: Index, value: C);
+
+    /// Remove a component previously inserted in the given index.
+    ///
+    /// You must only call `remove` on a non-empty index (after you have inserted a value with
+    /// `insert`).  After calling `remove` the index becomes empty.
     unsafe fn remove(&mut self, index: Index) -> C;
 }
 
@@ -129,6 +156,8 @@ impl<C> RawStorage<C> for HashMapStorage<C> {
     }
 }
 
+/// Wraps a `RawStorage` for some component with a `BitSet` mask to provide a safe, `Join`-able
+/// interface for component storage.
 pub struct MaskedStorage<C: Component> {
     mask: BitSet,
     storage: C::Storage,
