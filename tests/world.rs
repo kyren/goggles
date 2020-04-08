@@ -37,7 +37,7 @@ fn test_world() {
         ) = world.fetch();
 
         for _ in 0..100 {
-            let e = entities.allocate();
+            let e = entities.create();
             component_a.insert(e, CA(e.index())).unwrap();
             component_b.insert(e, CB(e.index())).unwrap();
         }
