@@ -37,7 +37,7 @@ fn test_masked_storage_join() {
 }
 
 #[test]
-fn test_masked_storage_par_join() {
+fn test_masked_storage_par_join_nomiri() {
     let mut a_storage = MaskedStorage::<CompA>::default();
     let mut b_storage = MaskedStorage::<CompB>::default();
 

@@ -39,7 +39,7 @@ jobs:
       - run:
           name: Run all tests under miri
           command: |
-            cargo +nightly miri test
+            cargo +nightly miri test -- --skip nomiri
       - run:
           name: Run all tests under sanitizers
           command: |
