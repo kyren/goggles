@@ -56,6 +56,8 @@ pub struct Allocator {
     raised_atomic: AtomicBitSet,
     killed_atomic: AtomicBitSet,
     cache: EntityCache,
+    // The maximum ever allocated index + 1.  If there are no outstanding atomic operations, the
+    // `generations` vector should be equal to this length.
     index_len: AtomicIndex,
 }
 
@@ -77,11 +79,16 @@ impl Allocator {
         self.alive.remove(entity.index);
         self.killed_atomic.remove(entity.index);
 
-        if !self.raised_atomic.remove(entity.index) {
-            let generation = &mut self.generations[entity.index as usize];
-            debug_assert!(generation.is_alive());
-            *generation = generation.killed();
+        // If this entity is alive atomically and we're killing it non-atomically, we must commit
+        // the entity as having been added then killed, so it can properly go into the cache.
+
+        self.update_generation_length();
+        let generation = &mut self.generations[entity.index as usize];
+
+        if self.raised_atomic.remove(entity.index) {
+            *generation = generation.raised().to_generation();
         }
+        *generation = generation.killed();
         self.cache.push(entity.index);
 
         Ok(())
@@ -138,16 +145,13 @@ impl Allocator {
             let index = *self.index_len.get_mut();
             let index_len = index.checked_add(1).expect("no entity left to allocate");
             *self.index_len.get_mut() = index_len;
-            debug_assert!(self.generations.len() <= index_len as usize);
-            self.generations
-                .resize_with(index_len as usize, Default::default);
+            self.update_generation_length();
             index
         });
 
         self.alive.add(index);
 
         let generation = &mut self.generations[index as usize];
-        debug_assert!(!generation.is_alive());
         let raised = generation.raised();
         *generation = raised.to_generation();
         Entity::new(index, raised)
@@ -189,14 +193,10 @@ impl Allocator {
     pub fn merge_atomic(&mut self, killed: &mut Vec<Entity>) {
         killed.clear();
 
-        let index_len = *self.index_len.get_mut();
-        debug_assert!(self.generations.len() <= index_len as usize);
-        self.generations
-            .resize_with(index_len as usize, Default::default);
+        self.update_generation_length();
 
         for index in (&self.raised_atomic).iter() {
             let generation = &mut self.generations[index as usize];
-            debug_assert!(!generation.is_alive());
             *generation = generation.raised().to_generation();
             self.alive.add(index);
         }
@@ -213,12 +213,20 @@ impl Allocator {
         self.cache.extend(killed.iter().map(|e| e.index));
     }
 
-    #[inline]
     fn generation(&self, index: Index) -> Generation {
         self.generations
             .get(index as usize)
             .copied()
             .unwrap_or(Generation::zero())
+    }
+
+    // Commit the changes to the length of the generation vector from the atomically adjusted
+    // index length.
+    fn update_generation_length(&mut self) {
+        let index_len = *self.index_len.get_mut() as usize;
+        if self.generations.len() < index_len {
+            self.generations.resize_with(index_len, Default::default);
+        }
     }
 }
 
@@ -244,7 +252,7 @@ struct EntityCache {
 
 impl EntityCache {
     fn push(&mut self, index: Index) {
-        self.extend(iter::once(index))
+        self.extend(iter::once(index));
     }
 
     fn pop(&mut self) -> Option<Index> {
@@ -296,7 +304,11 @@ impl Generation {
     }
 
     fn to_alive(self) -> Option<AliveGeneration> {
-        NZGenId::new(self.0).map(AliveGeneration)
+        if self.0 > 0 {
+            Some(AliveGeneration(unsafe { NZGenId::new_unchecked(self.0) }))
+        } else {
+            None
+        }
     }
 
     // If this generation is alive, returns the 'killed' version of this generation, otherwise just

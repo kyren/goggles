@@ -29,6 +29,7 @@ fn test_world() {
     world.insert_component::<CA>();
     world.insert_component::<CB>();
 
+    let mut evec = Vec::new();
     {
         let (entities, mut component_a, mut component_b): (
             Entities,
@@ -40,24 +41,37 @@ fn test_world() {
             let e = entities.create();
             component_a.insert(e, CA(e.index())).unwrap();
             component_b.insert(e, CB(e.index())).unwrap();
+            evec.push(e);
         }
     }
 
-    let (entities, resource_a, resource_b, component_a, component_b): (
-        Entities,
-        ReadResource<RA>,
-        WriteResource<RB>,
-        ReadComponent<CA>,
-        WriteComponent<CB>,
-    ) = world.fetch();
+    {
+        let (entities, resource_a, resource_b, component_a, component_b): (
+            Entities,
+            ReadResource<RA>,
+            WriteResource<RB>,
+            ReadComponent<CA>,
+            WriteComponent<CB>,
+        ) = world.fetch();
 
-    assert_eq!(resource_a.0, 1);
-    assert_eq!(resource_b.0, 2);
+        assert_eq!(resource_a.0, 1);
+        assert_eq!(resource_b.0, 2);
 
-    for (e, a, b) in (&entities, &component_a, &component_b).join() {
-        assert_eq!(e.index(), a.0);
-        assert_eq!(e.index(), b.0);
+        for (e, a, b) in (&entities, &component_a, &component_b).join() {
+            assert_eq!(e.index(), a.0);
+            assert_eq!(e.index(), b.0);
+        }
+
+        assert_eq!((&entities, &component_a, &component_b).join().count(), 100);
     }
 
-    assert_eq!((&entities, &component_a, &component_b).join().count(), 100);
+    for &e in &evec {
+        assert!(world.entities().is_alive(e));
+    }
+
+    world.merge_atomic();
+
+    for &e in &evec {
+        assert!(world.entities().is_alive(e));
+    }
 }

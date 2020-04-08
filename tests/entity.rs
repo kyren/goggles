@@ -53,6 +53,32 @@ fn allocate_atomic_kill_atomic() {
     assert!(!allocator.is_alive(e4));
     assert!(!allocator.is_alive(e5));
     assert!(allocator.is_alive(e6));
+
+    let e7 = allocator.allocate();
+    let e8 = allocator.allocate_atomic();
+    let e9 = allocator.allocate_atomic();
+
+    assert!(!allocator.is_alive(e1));
+    assert!(!allocator.is_alive(e2));
+    assert!(allocator.is_alive(e3));
+    assert!(!allocator.is_alive(e4));
+    assert!(!allocator.is_alive(e5));
+    assert!(allocator.is_alive(e6));
+    assert!(allocator.is_alive(e7));
+    assert!(allocator.is_alive(e8));
+    assert!(allocator.is_alive(e9));
+
+    allocator.merge_atomic(&mut killed);
+
+    assert!(!allocator.is_alive(e1));
+    assert!(!allocator.is_alive(e2));
+    assert!(allocator.is_alive(e3));
+    assert!(!allocator.is_alive(e4));
+    assert!(!allocator.is_alive(e5));
+    assert!(allocator.is_alive(e6));
+    assert!(allocator.is_alive(e7));
+    assert!(allocator.is_alive(e8));
+    assert!(allocator.is_alive(e9));
 }
 
 #[test]
