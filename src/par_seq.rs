@@ -41,6 +41,37 @@ pub struct ResourceConflict {
 /// This trait is designed so that systems may read or write to resources inside the `world`
 /// parameter.  Systems report the resources they intend to use abstractly through the `Resources`
 /// type, and this provides the ability to check parallel systems for resource conflicts.
+//
+// TODO: It would be much nicer if our `System` trait could be this:
+//
+// ```
+// pub trait System<'a> {
+//     type Resources: Resources;
+//     type Pool: Pool;
+//     type Args: ?Sized + 'a;
+//     type Error: Error;
+//
+//     /// Check for any internal resource conficts and if there are none, return a `Resources` that
+//     /// represents the used resources.
+//     ///
+//     /// Must be a constant value, this will generally only be called once.
+//     fn check_resources(&self) -> Result<Self::Resources, ResourceConflict>;
+//
+//     fn run(
+//         &mut self,
+//         pool: &Self::Pool,
+//         args: &Self::Args,
+//     ) -> Result<(), Self::Error>;
+// }
+// ```
+//
+// However, when we implement this `System` trait for `Par` and `Seq` and try to use this with more
+// than a few systems, we unfortunately run into quadratic or exponential Rust compiler behavior
+// (Maybe this bug: https://github.com/rust-lang/rust/issues/69671).
+//
+// This would allow dropping the `World` associated type and would be much more general, allowing
+// you to pass arbitrary non-'static arguments as parameters to `System::run` if your systems
+// implement `for<'a> System<'a>`.
 pub trait System {
     type World: ?Sized;
     type Resources: Resources;
