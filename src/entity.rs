@@ -14,84 +14,6 @@ use crate::join::{Index, Join};
 #[error("Entity is no longer alive or has a mismatched generation")]
 pub struct WrongGeneration;
 
-const MAX_INDEX: Index = u32::MAX;
-type AtomicIndex = AtomicU32;
-
-pub type GenId = i32;
-type NZGenId = NonZeroI32;
-
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
-pub struct Generation(GenId);
-
-impl Generation {
-    /// Generations start at the dead generation of zero.
-    pub fn zero() -> Generation {
-        Generation(0)
-    }
-
-    #[inline]
-    pub fn id(self) -> GenId {
-        self.0
-    }
-
-    /// A generation is alive if its ID is > 0
-    #[inline]
-    pub fn is_alive(self) -> bool {
-        self.0 > 0
-    }
-
-    pub fn to_alive(self) -> Option<AliveGeneration> {
-        NZGenId::new(self.0).map(AliveGeneration)
-    }
-
-    /// If this generation is alive, returns the 'killed' version of this generation, otherwise just
-    /// returns the current dead generation.
-    ///
-    /// The 'killed' version of a generation has an ID which is the negation of its current live ID.
-    #[inline]
-    pub fn killed(self) -> Generation {
-        if self.is_alive() {
-            Generation(-self.id())
-        } else {
-            self
-        }
-    }
-
-    /// If this generation is dead, returns the 'raised' version of this generation, otherwise just
-    /// returns the current live generation.
-    ///
-    /// The 'raised' version of a generation has an ID which is the negation of its current dead ID
-    /// (so the positive verison of its dead ID) + 1.
-    #[inline]
-    pub fn raised(self) -> AliveGeneration {
-        if self.0 > 0 {
-            AliveGeneration(unsafe { NZGenId::new_unchecked(self.0) })
-        } else {
-            let id = (1 as GenId)
-                .checked_sub(self.id())
-                .expect("generation overflow");
-            AliveGeneration(unsafe { NZGenId::new_unchecked(id) })
-        }
-    }
-}
-
-/// A generation that is guaranteed to be alive.
-///
-/// Since the generation id cannot be 0, this nables layout optimizations.
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
-pub struct AliveGeneration(NZGenId);
-
-impl AliveGeneration {
-    #[inline]
-    pub fn id(self) -> GenId {
-        self.0.get()
-    }
-
-    pub fn to_generation(self) -> Generation {
-        Generation(self.0.get())
-    }
-}
-
 /// Entities are unqiue "generational indexes" with low-valued `index` values that are appropriate
 /// as indexes into contiguous arrays.
 ///
@@ -114,11 +36,10 @@ impl Entity {
 
     /// The entity's generation.
     ///
-    /// `Entity` values always contain generations for which `Generation::is_alive` returns true
-    /// (they have ID > 0).
+    /// This will never be zero.
     #[inline]
-    pub fn generation(self) -> AliveGeneration {
-        self.generation
+    pub fn generation(self) -> u32 {
+        self.generation.id() as u32
     }
 
     fn new(index: Index, generation: AliveGeneration) -> Entity {
@@ -195,17 +116,6 @@ impl Allocator {
     #[inline]
     pub fn is_alive(&self, e: Entity) -> bool {
         self.entity(e.index()) == Some(e)
-    }
-
-    /// Returns the generation for this `Index`.
-    ///
-    /// All indexes start as the dead 'zero' generation.
-    #[inline]
-    pub fn generation(&self, index: Index) -> Generation {
-        self.generations
-            .get(index as usize)
-            .copied()
-            .unwrap_or(Generation::zero())
     }
 
     /// *If* the given index has a live entity associated with it, returns that live `Entity`.
@@ -301,6 +211,14 @@ impl Allocator {
 
         self.cache.extend(killed.iter().map(|e| e.index));
     }
+
+    #[inline]
+    fn generation(&self, index: Index) -> Generation {
+        self.generations
+            .get(index as usize)
+            .copied()
+            .unwrap_or(Generation::zero())
+    }
 }
 
 impl<'a> Join for &'a Allocator {
@@ -352,8 +270,81 @@ impl Extend<Index> for EntityCache {
     }
 }
 
-/// Increments `i` atomically without wrapping on overflow.  Resembles a `fetch_add(1,
-/// Ordering::Relaxed)` with checked overflow, returning `None` instead.
+const MAX_INDEX: Index = u32::MAX;
+type AtomicIndex = AtomicU32;
+
+type GenId = i32;
+type NZGenId = NonZeroI32;
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
+struct Generation(GenId);
+
+impl Generation {
+    // Generations start at the dead generation of zero.
+    fn zero() -> Generation {
+        Generation(0)
+    }
+
+    fn id(self) -> GenId {
+        self.0
+    }
+
+    // A generation is alive if its ID is > 0
+    fn is_alive(self) -> bool {
+        self.0 > 0
+    }
+
+    fn to_alive(self) -> Option<AliveGeneration> {
+        NZGenId::new(self.0).map(AliveGeneration)
+    }
+
+    // If this generation is alive, returns the 'killed' version of this generation, otherwise just
+    // returns the current dead generation.
+    //
+    // The 'killed' version of a generation has an ID which is the negation of its current live ID.
+    fn killed(self) -> Generation {
+        if self.is_alive() {
+            Generation(-self.id())
+        } else {
+            self
+        }
+    }
+
+    // If this generation is dead, returns the 'raised' version of this generation, otherwise just
+    // returns the current live generation.
+    //
+    // The 'raised' version of a generation has an ID which is the negation of its current dead ID
+    // (so the positive verison of its dead ID) + 1.
+    fn raised(self) -> AliveGeneration {
+        if self.0 > 0 {
+            AliveGeneration(unsafe { NZGenId::new_unchecked(self.0) })
+        } else {
+            let id = (1 as GenId)
+                .checked_sub(self.id())
+                .expect("generation overflow");
+            AliveGeneration(unsafe { NZGenId::new_unchecked(id) })
+        }
+    }
+}
+
+// A generation that is guaranteed to be alive.
+//
+// Since the generation id cannot be 0, this nables layout optimizations.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+struct AliveGeneration(NZGenId);
+
+impl AliveGeneration {
+    fn id(self) -> GenId {
+        self.0.get()
+    }
+
+    fn to_generation(self) -> Generation {
+        Generation(self.0.get())
+    }
+}
+
+// Increments `i` atomically without wrapping on overflow.  Resembles a `fetch_add(1,
+// Ordering::Relaxed)` with checked overflow, returning `None` instead.
 fn atomic_increment(i: &AtomicIndex) -> Option<Index> {
     let mut prev = i.load(Ordering::Relaxed);
     while prev != MAX_INDEX {
@@ -365,8 +356,8 @@ fn atomic_increment(i: &AtomicIndex) -> Option<Index> {
     None
 }
 
-/// Increments `i` atomically without wrapping on overflow.  Resembles a `fetch_sub(1,
-/// Ordering::Relaxed)` with checked underflow, returning `None` instead.
+// Increments `i` atomically without wrapping on overflow.  Resembles a `fetch_sub(1,
+// Ordering::Relaxed)` with checked underflow, returning `None` instead.
 fn atomic_decrement(i: &AtomicIndex) -> Option<Index> {
     let mut prev = i.load(Ordering::Relaxed);
     while prev != 0 {
