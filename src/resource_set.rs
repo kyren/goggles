@@ -25,11 +25,11 @@ impl ResourceSet {
 
     pub fn insert<T>(&mut self, r: T) -> Option<T>
     where
-        T: Any + Send + 'static,
+        T: Send + 'static,
     {
         self.resources
             .insert(
-                Resource::<T>::id(),
+                ResourceId::of::<T>(),
                 AtomicRefCell::new(Box::new(Resource::new(r))),
             )
             .map(|r| {
@@ -42,21 +42,31 @@ impl ResourceSet {
 
     pub fn contains<T>(&self) -> bool
     where
-        T: Any + Send + 'static,
+        T: Send + 'static,
     {
-        self.resources.contains_key(&Resource::<T>::id())
+        self.resources.contains_key(&ResourceId::of::<T>())
     }
 
     pub fn remove<T>(&mut self) -> Option<T>
     where
-        T: Any + Send + 'static,
+        T: Send + 'static,
     {
-        self.resources.remove(&Resource::<T>::id()).map(|r| {
+        self.resources.remove(&ResourceId::of::<T>()).map(|r| {
             Box::<dyn Any + Send>::from(r.into_inner())
                 .downcast::<Resource<T>>()
                 .unwrap()
                 .into_inner()
         })
+    }
+
+    pub fn get_mut<T>(&mut self) -> &mut T
+        where T: 'static,
+    {
+        if let Some(r) = self.resources.get_mut(&ResourceId::of::<T>()) {
+            r.get_mut().downcast_mut::<Resource<T>>().unwrap().get_mut()
+        } else {
+            panic!("no such resource {:?}", type_name::<T>());
+        }
     }
 
     /// Borrow the given resource immutably.
@@ -65,9 +75,9 @@ impl ResourceSet {
     /// Panics if the resource has not been inserted or is already borrowed mutably.
     pub fn borrow<T>(&self) -> AtomicRef<T>
     where
-        T: Any + Send + Sync + 'static,
+        T: Send + Sync + 'static,
     {
-        if let Some(r) = self.resources.get(&Resource::<T>::id()) {
+        if let Some(r) = self.resources.get(&ResourceId::of::<T>()) {
             AtomicRef::map(r.borrow(), |r| {
                 r.downcast_ref::<Resource<T>>().unwrap().get()
             })
@@ -82,9 +92,9 @@ impl ResourceSet {
     /// Panics if the resource has not been inserted or is already borrowed.
     pub fn borrow_mut<T>(&self) -> AtomicRefMut<T>
     where
-        T: Any + Send + 'static,
+        T: Send + 'static,
     {
-        if let Some(r) = self.resources.get(&Resource::<T>::id()) {
+        if let Some(r) = self.resources.get(&ResourceId::of::<T>()) {
             AtomicRefMut::map(r.borrow_mut(), |r| {
                 r.downcast_mut::<Resource<T>>().unwrap().get_mut()
             })
@@ -105,18 +115,24 @@ impl ResourceSet {
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ResourceId(TypeId);
 
+impl ResourceId {
+    pub fn of<C: 'static>() -> ResourceId {
+        ResourceId(TypeId::of::<C>())
+    }
+}
+
 pub struct Read<'a, T>(AtomicRef<'a, T>);
 
 impl<'a, T> SystemData<'a> for Read<'a, T>
 where
-    T: Any + Send + Sync + 'static,
+    T: Send + Sync + 'static,
 {
     type Source = ResourceSet;
     type Resources = RwResources<ResourceId>;
 
     fn check_resources() -> Result<RwResources<ResourceId>, ResourceConflict> {
         Ok(RwResources::from_iters(
-            iter::once(Resource::<T>::id()),
+            iter::once(ResourceId::of::<T>()),
             iter::empty(),
         ))
     }
@@ -138,7 +154,7 @@ pub struct Write<'a, T>(AtomicRefMut<'a, T>);
 
 impl<'a, T> SystemData<'a> for Write<'a, T>
 where
-    T: Any + Send + 'static,
+    T: Send + 'static,
 {
     type Source = ResourceSet;
     type Resources = RwResources<ResourceId>;
@@ -146,7 +162,7 @@ where
     fn check_resources() -> Result<RwResources<ResourceId>, ResourceConflict> {
         Ok(RwResources::from_iters(
             iter::empty(),
-            iter::once(Resource::<T>::id()),
+            iter::once(ResourceId::of::<T>()),
         ))
     }
 
@@ -169,29 +185,4 @@ impl<'a, T> DerefMut for Write<'a, T> {
     }
 }
 
-struct Resource<T>(MakeSync<T>);
-
-impl<T: Any> Resource<T> {
-    fn id() -> ResourceId {
-        ResourceId(TypeId::of::<T>())
-    }
-
-    fn new(t: T) -> Resource<T> {
-        Resource(MakeSync::new(t))
-    }
-
-    fn into_inner(self) -> T {
-        self.0.into_inner()
-    }
-
-    fn get(&self) -> &T
-    where
-        T: Sync,
-    {
-        self.0.get()
-    }
-
-    fn get_mut(&mut self) -> &mut T {
-        self.0.get_mut()
-    }
-}
+type Resource<T> = MakeSync<T>;

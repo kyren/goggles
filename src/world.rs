@@ -1,5 +1,5 @@
 use std::{
-    any::{Any, TypeId},
+    any::TypeId,
     collections::HashMap,
     ops::{Deref, DerefMut},
 };
@@ -20,7 +20,7 @@ pub struct World {
     allocator: AtomicRefCell<Allocator>,
     resources: ResourceSet,
     components: ResourceSet,
-    remove_components: HashMap<TypeId, Box<dyn Fn(&ResourceSet, &[Entity]) + Send>>,
+    remove_components: HashMap<TypeId, Box<dyn Fn(&ResourceSet, &[Entity]) + Send + Sync>>,
     killed: Vec<Entity>,
 }
 
@@ -55,21 +55,28 @@ impl World {
 
     pub fn read_resource<R>(&self) -> ReadResource<R>
     where
-        R: Any + Send + Sync + 'static,
+        R: Send + Sync + 'static,
     {
-        ResourceAccess(self.resources.borrow::<R>())
+        ResourceAccess(self.resources.borrow())
     }
 
     pub fn write_resource<R>(&self) -> WriteResource<R>
     where
-        R: Any + Send + 'static,
+        R: Send + 'static,
     {
-        ResourceAccess(self.resources.borrow_mut::<R>())
+        ResourceAccess(self.resources.borrow_mut())
+    }
+
+    pub fn get_resource_mut<R>(&mut self) -> &mut R
+    where
+        R: 'static,
+    {
+        self.resources.get_mut()
     }
 
     pub fn insert_component<C>(&mut self) -> Option<MaskedStorage<C>>
     where
-        C: Component + Any + 'static,
+        C: Component + 'static,
         C::Storage: Default + Send,
     {
         self.remove_components.insert(
@@ -86,16 +93,16 @@ impl World {
 
     pub fn remove_component<C>(&mut self) -> Option<MaskedStorage<C>>
     where
-        C: Component + Any + 'static,
+        C: Component + 'static,
         C::Storage: Default + Send,
     {
         self.remove_components.remove(&TypeId::of::<C>());
         self.components.remove::<MaskedStorage<C>>()
     }
 
-    fn read_component<C>(&self) -> ReadComponent<C>
+    pub fn read_component<C>(&self) -> ReadComponent<C>
     where
-        C: Component + Any + 'static,
+        C: Component + 'static,
         C::Storage: Send + Sync,
     {
         ComponentAccess {
@@ -104,14 +111,24 @@ impl World {
         }
     }
 
-    fn write_component<C>(&self) -> WriteComponent<C>
+    pub fn write_component<C>(&self) -> WriteComponent<C>
     where
-        C: Component + Any + 'static,
+        C: Component + 'static,
         C::Storage: Send,
     {
         ComponentAccess {
             storage: self.components.borrow_mut(),
             entities: self.entities(),
+        }
+    }
+
+    pub fn get_component_mut<C>(&mut self) -> ComponentAccess<C, &mut MaskedStorage<C>>
+    where
+        C: Component + 'static,
+    {
+        ComponentAccess {
+            storage: self.components.get_mut(),
+            entities: Entities(self.allocator.borrow()),
         }
     }
 
@@ -139,8 +156,20 @@ impl World {
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ResourceId(TypeId);
 
+impl ResourceId {
+    pub fn of<C: 'static>() -> ResourceId {
+        ResourceId(TypeId::of::<C>())
+    }
+}
+
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct ComponentId(TypeId);
+
+impl ComponentId {
+    pub fn of<C: Component + 'static>() -> ComponentId {
+        ComponentId(TypeId::of::<C>())
+    }
+}
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum WorldResourceId {
@@ -148,6 +177,8 @@ pub enum WorldResourceId {
     Resource(ResourceId),
     Component(ComponentId),
 }
+
+pub type WorldResources = RwResources<WorldResourceId>;
 
 pub struct Entities<'a>(AtomicRef<'a, Allocator>);
 
@@ -228,7 +259,7 @@ pub type ReadResource<'a, R> = ResourceAccess<AtomicRef<'a, R>>;
 
 impl<'a, R> SystemData<'a> for ReadResource<'a, R>
 where
-    R: Any + Send + Sync + 'static,
+    R: Send + Sync + 'static,
 {
     type Source = World;
     type Resources = RwResources<WorldResourceId>;
@@ -248,7 +279,7 @@ pub type WriteResource<'a, R> = ResourceAccess<AtomicRefMut<'a, R>>;
 
 impl<'a, R> SystemData<'a> for WriteResource<'a, R>
 where
-    R: Any + Send + 'static,
+    R: Send + 'static,
 {
     type Source = World;
     type Resources = RwResources<WorldResourceId>;
@@ -363,7 +394,7 @@ pub type ReadComponent<'a, C> = ComponentAccess<'a, C, AtomicRef<'a, MaskedStora
 
 impl<'a, C> SystemData<'a> for ReadComponent<'a, C>
 where
-    C: Component + Any + Send + Sync + 'static,
+    C: Component + Send + Sync + 'static,
     C::Storage: Send + Sync,
 {
     type Source = World;
@@ -385,7 +416,7 @@ pub type WriteComponent<'a, C> = ComponentAccess<'a, C, AtomicRefMut<'a, MaskedS
 
 impl<'a, C> SystemData<'a> for WriteComponent<'a, C>
 where
-    C: Component + Any + Send + 'static,
+    C: Component + Send + 'static,
     C::Storage: Send,
 {
     type Source = World;
