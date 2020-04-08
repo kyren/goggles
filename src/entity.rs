@@ -79,16 +79,19 @@ impl Allocator {
         self.alive.remove(entity.index);
         self.killed_atomic.remove(entity.index);
 
-        // If this entity is alive atomically and we're killing it non-atomically, we must commit
-        // the entity as having been added then killed so it can properly go into the cache.
-
-        self.update_generation_length();
-        let generation = &mut self.generations[entity.index as usize];
-
         if self.raised_atomic.remove(entity.index) {
-            *generation = generation.raised().generation();
+            // If this entity is alive atomically and we're killing it non-atomically, we must commit
+            // the entity as having been added then killed so it can properly go into the cache.
+            self.update_generation_length();
+            let generation = &mut self.generations[entity.index as usize];
+            debug_assert!(!generation.is_alive());
+            *generation = generation.raised().generation().killed();
+        } else {
+            let generation = &mut self.generations[entity.index as usize];
+            debug_assert!(generation.is_alive());
+            *generation = generation.killed();
         }
-        *generation = generation.killed();
+
         self.cache.push(entity.index);
 
         Ok(())
