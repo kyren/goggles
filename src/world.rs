@@ -39,6 +39,18 @@ impl World {
         Entities(self.allocator.borrow())
     }
 
+    pub fn create_entity(&mut self) -> Entity {
+        self.allocator.get_mut().allocate()
+    }
+
+    pub fn delete_entity(&mut self, e: Entity) -> Result<(), WrongGeneration> {
+        self.allocator.get_mut().kill(e)?;
+        for remove_component in self.remove_components.values() {
+            remove_component(&self.components, &[e]);
+        }
+        Ok(())
+    }
+
     pub fn insert_resource<R>(&mut self, r: R) -> Option<R>
     where
         R: Send + 'static,
@@ -142,7 +154,7 @@ impl World {
     /// Merge any pending atomic entity operations.
     ///
     /// Merges atomically allocated entities into the normal entity `BitSet` for performance, and
-    /// finalizes any entities that were requested to be killed.
+    /// finalizes any entities that were requested to be deleted.
     ///
     /// No entity is actually removed until this method is called.
     pub fn merge_atomic(&mut self) {
@@ -185,9 +197,9 @@ pub struct Entities<'a>(AtomicRef<'a, Allocator>);
 impl<'a> Entities<'a> {
     /// Atomically request that this entity be removed on the next call to `World::merge_atomic`.
     ///
-    /// An entity is not killed until `World::merge_atomic` is called, so it will still be 'alive'
+    /// An entity is not deleted until `World::merge_atomic` is called, so it will still be 'alive'
     /// and show up in queries until that time.
-    pub fn kill(&self, e: Entity) -> Result<(), WrongGeneration> {
+    pub fn delete(&self, e: Entity) -> Result<(), WrongGeneration> {
         self.0.kill_atomic(e)
     }
 
@@ -202,7 +214,7 @@ impl<'a> Entities<'a> {
     /// Atomically allocate an entity.  An atomically allocated entity is indistinguishable from a
     /// regular live entity, but when `World::merge_atomic` is called it will be merged into a
     /// non-atomic `BitSet` for performance.
-    pub fn allocate(&self) -> Entity {
+    pub fn create(&self) -> Entity {
         self.0.allocate_atomic()
     }
 
@@ -225,7 +237,7 @@ impl<'a> SystemData<'a> for Entities<'a> {
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::read_one(WorldResourceId::Entities))
+        Ok(RwResources::new().read(WorldResourceId::Entities))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -265,9 +277,7 @@ where
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::read_one(WorldResourceId::Resource(
-            ResourceId(TypeId::of::<R>()),
-        )))
+        Ok(RwResources::new().read(WorldResourceId::Resource(ResourceId(TypeId::of::<R>()))))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -285,9 +295,7 @@ where
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::write_one(WorldResourceId::Resource(
-            ResourceId(TypeId::of::<R>()),
-        )))
+        Ok(RwResources::new().write(WorldResourceId::Resource(ResourceId(TypeId::of::<R>()))))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -401,10 +409,9 @@ where
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        let mut r = RwResources::new();
-        r.add_read(WorldResourceId::Entities);
-        r.add_read(WorldResourceId::Component(ComponentId(TypeId::of::<C>())));
-        Ok(r)
+        Ok(RwResources::new()
+            .read(WorldResourceId::Entities)
+            .read(WorldResourceId::Component(ComponentId(TypeId::of::<C>()))))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -423,10 +430,9 @@ where
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        let mut r = RwResources::new();
-        r.add_read(WorldResourceId::Entities);
-        r.add_write(WorldResourceId::Component(ComponentId(TypeId::of::<C>())));
-        Ok(r)
+        Ok(RwResources::new()
+            .read(WorldResourceId::Entities)
+            .write(WorldResourceId::Component(ComponentId(TypeId::of::<C>()))))
     }
 
     fn fetch(world: &'a World) -> Self {

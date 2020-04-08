@@ -77,21 +77,21 @@ fn test_par_seq_conflict() {
 
 #[test]
 fn test_read_write_resources() {
-    let mut rw1 = RwResources::new();
-    rw1.add_read("r1");
-    rw1.add_read("r2");
-    rw1.add_write("r3");
-    rw1.add_read("r3");
-    rw1.add_read("r4");
+    let rw1 = RwResources::new()
+    .read("r1")
+    .read("r2")
+    .write("r3")
+    .read("r3")
+    .read("r4");
 
-    let mut rw2 = RwResources::new();
-    rw2.add_read("r2");
-    rw2.add_read("r4");
+    let rw2 = RwResources::new()
+    .read("r2")
+    .read("r4");
 
-    let mut rw3 = RwResources::new();
-    rw3.add_read("r3");
-    rw3.add_read("r4");
-    rw3.add_write("r5");
+    let rw3 = RwResources::new()
+    .read("r3")
+    .read("r4")
+    .write("r5");
 
     assert!(!rw1.conflicts_with(&rw2));
     assert!(rw1.conflicts_with(&rw3));

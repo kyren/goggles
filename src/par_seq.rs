@@ -253,18 +253,6 @@ where
         Default::default()
     }
 
-    pub fn read_one(r: R) -> Self {
-        let mut rw = Self::new();
-        rw.add_read(r);
-        rw
-    }
-
-    pub fn write_one(r: R) -> Self {
-        let mut rw = Self::new();
-        rw.add_write(r);
-        rw
-    }
-
     pub fn from_iters(
         reads: impl IntoIterator<Item = R>,
         writes: impl IntoIterator<Item = R>,
@@ -283,6 +271,16 @@ where
     pub fn add_write(&mut self, r: R) {
         self.reads.remove(&r);
         self.writes.insert(r);
+    }
+
+    pub fn read(mut self, r: R) -> Self {
+        self.add_read(r);
+        self
+    }
+
+    pub fn write(mut self, r: R) -> Self {
+        self.add_write(r);
+        self
     }
 }
 
