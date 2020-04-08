@@ -2,7 +2,7 @@ use std::{any::type_name, collections::HashSet, hash::Hash};
 
 use thiserror::Error;
 
-/// Trait for resources that are used in a in a `System`
+/// Trait for identifying resources that are used in a in a `System`
 pub trait Resources: Default {
     /// Union this set of resources with the given set of resources.
     fn union(&mut self, other: &Self);
@@ -226,7 +226,8 @@ macro_rules! seq {
 
 /// A `Resources` implementation that allows for R/W locks.
 ///
-/// Two read locks for the same resource do not conflict, but a read and a write or two writes do.
+/// Two read locks for the same resource do not conflict, but a read and a write or two writes to
+/// the same resource do.
 pub struct RwResources<R> {
     reads: HashSet<R>,
     writes: HashSet<R>,
