@@ -1,6 +1,6 @@
 # goggles #
 
-*like a nice pair of specs, but much more uncomfortable and inconvenient*
+*It's like a nice pair of specs, except much more uncomfortable and inconvenient*
 
 ### THIS IS CURRENTLY VERY WIP, I'M STILL WRITING IT ###
 
