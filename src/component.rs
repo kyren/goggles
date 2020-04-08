@@ -18,8 +18,7 @@ pub trait RawStorage<C> {
     /// Return a reference to the component at the given index.
     ///
     /// You *must* only call `get` with index values that are non-empty (have been previously had
-    /// components inserted with `insert`).  You must also *not* call `insert` or `remove` on this
-    /// index while there is a live reference to this component.
+    /// components inserted with `insert`).
     unsafe fn get(&self, index: Index) -> &C;
 
     /// Return a mutable reference to the component at the given index.
@@ -29,8 +28,7 @@ pub trait RawStorage<C> {
     ///
     /// Returns a *mutable* reference to the previously inserted component.  You must follow Rust's
     /// aliasing rules here, so you must not call this method if there is any other live reference
-    /// to the same component.  You must also *not* call `insert` or `remove` on this index while
-    /// there is a live reference to the component.
+    /// to the same component.
     unsafe fn get_mut(&self, index: Index) -> &mut C;
 
     /// Insert a new component value in the given index.
