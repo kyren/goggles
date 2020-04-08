@@ -51,10 +51,6 @@ pub struct ResourceConflict {
 //     type Args: ?Sized + 'a;
 //     type Error: Error;
 //
-//     /// Check for any internal resource conficts and if there are none, return a `Resources` that
-//     /// represents the used resources.
-//     ///
-//     /// Must be a constant value, this will generally only be called once.
 //     fn check_resources(&self) -> Result<Self::Resources, ResourceConflict>;
 //
 //     fn run(
