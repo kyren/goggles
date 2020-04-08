@@ -184,7 +184,8 @@ impl Allocator {
     /// Atomically allocated entities become merged into the faster non-atomic BitSet, and entities
     /// marked for deletion with `Allocator::kill_atomic` actually become killed.
     ///
-    /// Takes a `&mut Vec<Entity>` parameter which will be filled with newly killed entities.
+    /// Takes a `&mut Vec<Entity>` parameter which will be cleared and filled with newly killed
+    /// entities.
     pub fn merge_atomic(&mut self, killed: &mut Vec<Entity>) {
         killed.clear();
 

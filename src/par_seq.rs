@@ -224,7 +224,7 @@ macro_rules! seq {
     };
 }
 
-/// A `Resources` implementation that allows for R/W locks.
+/// A `Resources` implementation that describes R/W locks.
 ///
 /// Two read locks for the same resource do not conflict, but a read and a write or two writes to
 /// the same resource do.
@@ -253,10 +253,22 @@ where
         Default::default()
     }
 
+    pub fn read_one(r: R) -> Self {
+        let mut rw = Self::new();
+        rw.add_read(r);
+        rw
+    }
+
+    pub fn write_one(r: R) -> Self {
+        let mut rw = Self::new();
+        rw.add_write(r);
+        rw
+    }
+
     pub fn from_iters(
         reads: impl IntoIterator<Item = R>,
         writes: impl IntoIterator<Item = R>,
-    ) -> RwResources<R> {
+    ) -> Self {
         let writes: HashSet<R> = writes.into_iter().collect();
         let reads: HashSet<R> = reads.into_iter().filter(|r| !writes.contains(r)).collect();
         RwResources { reads, writes }

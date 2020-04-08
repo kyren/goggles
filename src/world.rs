@@ -1,7 +1,6 @@
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    iter,
     ops::{Deref, DerefMut},
 };
 
@@ -18,28 +17,26 @@ use crate::{
 
 #[derive(Default)]
 pub struct World {
-    entities: AtomicRefCell<Entities>,
+    allocator: AtomicRefCell<Allocator>,
     resources: ResourceSet,
     components: ResourceSet,
     remove_components: HashMap<TypeId, Box<dyn Fn(&ResourceSet, &[Entity]) + Send>>,
+    killed: Vec<Entity>,
 }
 
 impl World {
     pub fn new() -> Self {
         World {
-            entities: AtomicRefCell::default(),
+            allocator: AtomicRefCell::default(),
             resources: ResourceSet::new(),
             components: ResourceSet::new(),
             remove_components: HashMap::new(),
+            killed: Vec::new(),
         }
     }
 
-    pub fn read_entities(&self) -> ReadEntities {
-        EntitiesAccess(self.entities.borrow())
-    }
-
-    pub fn write_entities(&self) -> WriteEntities {
-        EntitiesAccess(self.entities.borrow_mut())
+    pub fn entities(&self) -> Entities {
+        Entities(self.allocator.borrow())
     }
 
     pub fn insert_resource<R>(&mut self, r: R) -> Option<R>
@@ -103,7 +100,7 @@ impl World {
     {
         ComponentAccess {
             storage: self.components.borrow(),
-            entities: self.entities.borrow(),
+            entities: self.entities(),
         }
     }
 
@@ -114,7 +111,7 @@ impl World {
     {
         ComponentAccess {
             storage: self.components.borrow_mut(),
-            entities: self.entities.borrow(),
+            entities: self.entities(),
         }
     }
 
@@ -124,34 +121,18 @@ impl World {
     {
         S::fetch(self)
     }
-}
 
-#[derive(Default)]
-pub struct Entities(Allocator);
-
-impl Entities {
-    pub fn kill_atomic(&self, e: Entity) -> Result<(), WrongGeneration> {
-        self.0.kill_atomic(e)
-    }
-
-    pub fn is_alive(&self, e: Entity) -> bool {
-        self.0.is_alive(e)
-    }
-
-    pub fn entity(&self, index: Index) -> Option<Entity> {
-        self.0.entity(index)
-    }
-
-    pub fn allocate(&mut self) -> Entity {
-        self.0.allocate()
-    }
-
-    pub fn allocate_atomic(&self) -> Entity {
-        self.0.allocate_atomic()
-    }
-
-    pub fn live_bitset(&self) -> LiveBitSet {
-        self.0.live_bitset()
+    /// Merge any pending atomic entity operations.
+    ///
+    /// Merges atomically allocated entities into the normal entity `BitSet` for performance, and
+    /// finalizes any entities that were requested to be killed.
+    ///
+    /// No entity is actually removed until this method is called.
+    pub fn merge_atomic(&mut self) {
+        self.allocator.get_mut().merge_atomic(&mut self.killed);
+        for remove_component in self.remove_components.values() {
+            remove_component(&self.components, &self.killed);
+        }
     }
 }
 
@@ -168,73 +149,56 @@ pub enum WorldResourceId {
     Component(ComponentId),
 }
 
-pub struct EntitiesAccess<R>(R);
+pub struct Entities<'a>(AtomicRef<'a, Allocator>);
 
-impl<R> Deref for EntitiesAccess<R>
-where
-    R: Deref<Target = Entities>,
-{
-    type Target = Entities;
+impl<'a> Entities<'a> {
+    /// Atomically request that this entity be removed on the next call to `World::merge_atomic`.
+    ///
+    /// An entity is not killed until `World::merge_atomic` is called, so it will still be 'alive'
+    /// and show up in queries until that time.
+    pub fn kill(&self, e: Entity) -> Result<(), WrongGeneration> {
+        self.0.kill_atomic(e)
+    }
 
-    fn deref(&self) -> &Entities {
-        &*self.0
+    pub fn is_alive(&self, e: Entity) -> bool {
+        self.0.is_alive(e)
+    }
+
+    pub fn entity(&self, index: Index) -> Option<Entity> {
+        self.0.entity(index)
+    }
+
+    /// Atomically allocate an entity.  An atomically allocated entity is indistinguishable from a
+    /// regular live entity, but when `World::merge_atomic` is called it will be merged into a
+    /// non-atomic `BitSet` for performance.
+    pub fn allocate(&self) -> Entity {
+        self.0.allocate_atomic()
+    }
+
+    pub fn live_bitset(&self) -> LiveBitSet {
+        self.0.live_bitset()
     }
 }
 
-impl<R> DerefMut for EntitiesAccess<R>
-where
-    R: DerefMut<Target = Entities>,
-{
-    fn deref_mut(&mut self) -> &mut Entities {
-        &mut *self.0
-    }
-}
-
-impl<'a, R> IntoJoin for &'a EntitiesAccess<R>
-where
-    R: Deref<Target = Entities>,
-{
+impl<'a> IntoJoin for &'a Entities<'a> {
     type Item = Entity;
     type IntoJoin = &'a Allocator;
 
     fn into_join(self) -> Self::IntoJoin {
-        &(self.0).0
+        &*self.0
     }
 }
 
-pub type ReadEntities<'a> = EntitiesAccess<AtomicRef<'a, Entities>>;
-
-impl<'a> SystemData<'a> for ReadEntities<'a> {
+impl<'a> SystemData<'a> for Entities<'a> {
     type Source = World;
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::from_iters(
-            iter::once(WorldResourceId::Entities),
-            iter::empty(),
-        ))
+        Ok(RwResources::read_one(WorldResourceId::Entities))
     }
 
     fn fetch(world: &'a World) -> Self {
-        world.read_entities()
-    }
-}
-
-pub type WriteEntities<'a> = EntitiesAccess<AtomicRefMut<'a, Entities>>;
-
-impl<'a> SystemData<'a> for WriteEntities<'a> {
-    type Source = World;
-    type Resources = RwResources<WorldResourceId>;
-
-    fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::from_iters(
-            iter::empty(),
-            iter::once(WorldResourceId::Entities),
-        ))
-    }
-
-    fn fetch(world: &'a World) -> Self {
-        world.write_entities()
+        world.entities()
     }
 }
 
@@ -270,10 +234,9 @@ where
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::from_iters(
-            iter::once(WorldResourceId::Resource(ResourceId(TypeId::of::<R>()))),
-            iter::empty(),
-        ))
+        Ok(RwResources::read_one(WorldResourceId::Resource(
+            ResourceId(TypeId::of::<R>()),
+        )))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -291,10 +254,9 @@ where
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::from_iters(
-            iter::empty(),
-            iter::once(WorldResourceId::Resource(ResourceId(TypeId::of::<R>()))),
-        ))
+        Ok(RwResources::write_one(WorldResourceId::Resource(
+            ResourceId(TypeId::of::<R>()),
+        )))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -307,8 +269,8 @@ where
     C: Component,
     R: Deref<Target = MaskedStorage<C>>,
 {
+    entities: Entities<'a>,
     storage: R,
-    entities: AtomicRef<'a, Entities>,
 }
 
 impl<'a, C, R> ComponentAccess<'a, C, R>
@@ -408,15 +370,10 @@ where
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::from_iters(
-            [
-                WorldResourceId::Component(ComponentId(TypeId::of::<C>())),
-                WorldResourceId::Entities,
-            ]
-            .iter()
-            .copied(),
-            iter::empty(),
-        ))
+        let mut r = RwResources::new();
+        r.add_read(WorldResourceId::Entities);
+        r.add_read(WorldResourceId::Component(ComponentId(TypeId::of::<C>())));
+        Ok(r)
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -435,10 +392,10 @@ where
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::from_iters(
-            iter::once(WorldResourceId::Entities),
-            iter::once(WorldResourceId::Component(ComponentId(TypeId::of::<C>()))),
-        ))
+        let mut r = RwResources::new();
+        r.add_read(WorldResourceId::Entities);
+        r.add_write(WorldResourceId::Component(ComponentId(TypeId::of::<C>())));
+        Ok(r)
     }
 
     fn fetch(world: &'a World) -> Self {

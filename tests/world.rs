@@ -1,7 +1,7 @@
 use goggles::{
     component::{Component, VecStorage},
     join::IntoJoinExt,
-    world::{ReadComponent, ReadEntities, ReadResource, World, WriteComponent, WriteResource},
+    world::{ReadComponent, Entities, ReadResource, World, WriteComponent, WriteResource},
 };
 
 struct RA(i32);
@@ -31,20 +31,20 @@ fn test_world() {
 
     {
         let (entities, mut component_a, mut component_b): (
-            ReadEntities,
+            Entities,
             WriteComponent<CA>,
             WriteComponent<CB>,
         ) = world.fetch();
 
         for _ in 0..100 {
-            let e = entities.allocate_atomic();
+            let e = entities.allocate();
             component_a.insert(e, CA(e.index())).unwrap();
             component_b.insert(e, CB(e.index())).unwrap();
         }
     }
 
     let (entities, resource_a, resource_b, component_a, component_b): (
-        ReadEntities,
+        Entities,
         ReadResource<RA>,
         WriteResource<RB>,
         ReadComponent<CA>,
