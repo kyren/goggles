@@ -324,6 +324,7 @@ impl Pool for SeqPool {
 }
 
 /// A system runner that runs parallel systems using `rayon::join`.
+#[derive(Default)]
 pub struct RayonPool;
 
 impl Pool for RayonPool {
