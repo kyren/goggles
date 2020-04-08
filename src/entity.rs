@@ -8,13 +8,12 @@ use std::{
 use hibitset::{AtomicBitSet, BitSet, BitSetLike, BitSetOr};
 use thiserror::Error;
 
-use crate::join::Join;
+use crate::join::{Index, Join};
 
 #[derive(Debug, Error)]
 #[error("Entity is no longer alive or has a mismatched generation")]
 pub struct WrongGeneration;
 
-pub type Index = u32;
 const MAX_INDEX: Index = u32::MAX;
 type AtomicIndex = AtomicU32;
 
@@ -25,18 +24,9 @@ type NZGenId = NonZeroI32;
 pub struct Generation(GenId);
 
 impl Generation {
-    pub fn new() -> Allocator {
-        Allocator::default()
-    }
-
     /// Generations start at the dead generation of zero.
     pub fn zero() -> Generation {
         Generation(0)
-    }
-
-    /// The first live generation.
-    pub fn one() -> Generation {
-        Generation(1)
     }
 
     #[inline]
@@ -47,7 +37,11 @@ impl Generation {
     /// A generation is alive if its ID is > 0
     #[inline]
     pub fn is_alive(self) -> bool {
-        self.id() > 0
+        self.0 > 0
+    }
+
+    pub fn to_alive(self) -> Option<AliveGeneration> {
+        NZGenId::new(self.0).map(AliveGeneration)
     }
 
     /// If this generation is alive, returns the 'killed' version of this generation, otherwise just
@@ -69,16 +63,32 @@ impl Generation {
     /// The 'raised' version of a generation has an ID which is the negation of its current dead ID
     /// (so the positive verison of its dead ID) + 1.
     #[inline]
-    pub fn raised(self) -> Generation {
-        if !self.is_alive() {
-            Generation(
-                (1 as GenId)
-                    .checked_sub(self.id())
-                    .expect("generation overflow"),
-            )
+    pub fn raised(self) -> AliveGeneration {
+        if self.0 > 0 {
+            AliveGeneration(unsafe { NZGenId::new_unchecked(self.0) })
         } else {
-            self
+            let id = (1 as GenId)
+                .checked_sub(self.id())
+                .expect("generation overflow");
+            AliveGeneration(unsafe { NZGenId::new_unchecked(id) })
         }
+    }
+}
+
+/// A generation that is guaranteed to be alive.
+///
+/// Since the generation id cannot be 0, this nables layout optimizations.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+pub struct AliveGeneration(NZGenId);
+
+impl AliveGeneration {
+    #[inline]
+    pub fn id(self) -> GenId {
+        self.0.get()
+    }
+
+    pub fn to_generation(self) -> Generation {
+        Generation(self.0.get())
     }
 }
 
@@ -92,9 +102,7 @@ impl Generation {
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Entity {
     index: Index,
-    // The generation of an entity cannot be <= 0, so we use a NonZero type here to enable layout
-    // optimizations.
-    generation: NZGenId,
+    generation: AliveGeneration,
 }
 
 impl Entity {
@@ -109,16 +117,12 @@ impl Entity {
     /// `Entity` values always contain generations for which `Generation::is_alive` returns true
     /// (they have ID > 0).
     #[inline]
-    pub fn generation(self) -> Generation {
-        Generation(self.generation.get())
+    pub fn generation(self) -> AliveGeneration {
+        self.generation
     }
 
-    fn new(index: Index, generation: Generation) -> Entity {
-        debug_assert!(generation.is_alive());
-        Entity {
-            index,
-            generation: NZGenId::new(generation.0).unwrap(),
-        }
+    fn new(index: Index, generation: AliveGeneration) -> Entity {
+        Entity { index, generation }
     }
 }
 
@@ -208,10 +212,10 @@ impl Allocator {
     #[inline]
     pub fn entity(&self, index: Index) -> Option<Entity> {
         let generation = self.generation(index);
-        if !generation.is_alive() && self.raised_atomic.contains(index) {
+        if let Some(alive) = generation.to_alive() {
+            Some(Entity::new(index, alive))
+        } else if self.raised_atomic.contains(index) {
             Some(Entity::new(index, generation.raised()))
-        } else if generation.is_alive() {
-            Some(Entity::new(index, generation))
         } else {
             None
         }
@@ -234,9 +238,9 @@ impl Allocator {
 
         let generation = &mut self.generations[index as usize];
         debug_assert!(!generation.is_alive());
-        *generation = generation.raised();
-
-        Entity::new(index, *generation)
+        let raised = generation.raised();
+        *generation = raised.to_generation();
+        Entity::new(index, raised)
     }
 
     /// Allocate an entity atomically.
@@ -282,7 +286,7 @@ impl Allocator {
         for index in (&self.raised_atomic).iter() {
             let generation = &mut self.generations[index as usize];
             debug_assert!(!generation.is_alive());
-            *generation = generation.raised();
+            *generation = generation.raised().to_generation();
             self.alive.add(index);
         }
         self.raised_atomic.clear();
@@ -290,8 +294,7 @@ impl Allocator {
         for index in (&self.killed_atomic).iter() {
             self.alive.remove(index);
             let generation = &mut self.generations[index as usize];
-            debug_assert!(generation.is_alive());
-            killed.push(Entity::new(index, *generation));
+            killed.push(Entity::new(index, generation.to_alive().unwrap()));
             *generation = generation.killed();
         }
         self.killed_atomic.clear();

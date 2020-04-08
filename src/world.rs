@@ -9,8 +9,8 @@ use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 
 use crate::{
     component::{Component, MaskedStorage},
-    entity::{Allocator, Entity, Index, LiveBitSet, WrongGeneration},
-    join::IntoJoin,
+    entity::{Allocator, Entity, LiveBitSet, WrongGeneration},
+    join::{Index, IntoJoin},
     par_seq::{ResourceConflict, RwResources},
     resource_set::ResourceSet,
     system_data::SystemData,

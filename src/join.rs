@@ -8,7 +8,7 @@ use rayon::iter::{
 };
 use thiserror::Error;
 
-use crate::entity::Index;
+pub type Index = u32;
 
 pub trait Join {
     type Item;

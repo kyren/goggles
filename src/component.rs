@@ -7,7 +7,7 @@ use std::{
 
 use hibitset::{BitIter, BitSet, BitSetLike};
 
-use crate::{entity::Index, join::Join};
+use crate::join::{Index, Join};
 
 pub trait Component: Sized {
     type Storage: RawStorage<Self>;
