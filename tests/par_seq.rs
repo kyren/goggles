@@ -1,10 +1,6 @@
 use std::collections::HashSet;
 
-use goggles::{
-    par,
-    par_seq::{Error, ResourceConflict, Resources, RwResources, SeqPool, System},
-    seq,
-};
+use goggles::{par, seq, ResourceConflict, Resources, RwResources, SeqPool, System, SystemError};
 
 #[derive(Default)]
 struct TestResources(HashSet<&'static str>);
@@ -24,7 +20,7 @@ impl Resources for TestResources {
 #[derive(Debug)]
 struct TestError;
 
-impl Error for TestError {
+impl SystemError for TestError {
     fn combine(self, _: Self) -> Self {
         TestError
     }
@@ -78,20 +74,15 @@ fn test_par_seq_conflict() {
 #[test]
 fn test_read_write_resources() {
     let rw1 = RwResources::new()
-    .read("r1")
-    .read("r2")
-    .write("r3")
-    .read("r3")
-    .read("r4");
+        .read("r1")
+        .read("r2")
+        .write("r3")
+        .read("r3")
+        .read("r4");
 
-    let rw2 = RwResources::new()
-    .read("r2")
-    .read("r4");
+    let rw2 = RwResources::new().read("r2").read("r4");
 
-    let rw3 = RwResources::new()
-    .read("r3")
-    .read("r4")
-    .write("r5");
+    let rw3 = RwResources::new().read("r3").read("r4").write("r5");
 
     assert!(!rw1.conflicts_with(&rw2));
     assert!(rw1.conflicts_with(&rw3));

@@ -1,7 +1,6 @@
 use goggles::{
-    component::{Component, VecStorage},
-    join::IntoJoinExt,
-    world::{Entities, ReadComponent, ReadResource, World, WriteComponent, WriteResource},
+    join::IntoJoinExt, Component, Entities, ReadComponent, ReadResource, VecStorage, World,
+    WriteComponent, WriteResource,
 };
 
 struct RA(i32);

@@ -5,14 +5,17 @@ use std::{
 };
 
 use atomic_refcell::{AtomicRef, AtomicRefMut};
+use hibitset::AtomicBitSet;
 
 use crate::{
-    component::{Component, MaskedStorage},
+    component::Component,
     entity::{Allocator, Entity, LiveBitSet, WrongGeneration},
     join::{Index, IntoJoin},
+    masked::{GuardedJoin, MaskedStorage},
     par_seq::{ResourceConflict, RwResources},
     resource_set::ResourceSet,
     system_data::SystemData,
+    tracked::TrackedStorage,
 };
 
 #[derive(Default)]
@@ -367,12 +370,50 @@ where
         }
     }
 
+    pub fn update(&mut self, e: Entity, c: C) -> Result<Option<C>, WrongGeneration>
+    where
+        C: PartialEq,
+    {
+        if self.entities.is_alive(e) {
+            Ok(self.storage.update(e.index(), c))
+        } else {
+            Err(WrongGeneration)
+        }
+    }
+
     pub fn remove(&mut self, e: Entity) -> Result<Option<C>, WrongGeneration> {
         if self.entities.is_alive(e) {
             Ok(self.storage.remove(e.index()))
         } else {
             Err(WrongGeneration)
         }
+    }
+
+    pub fn guard(&mut self) -> GuardedJoin<C> {
+        self.storage.guard()
+    }
+}
+
+impl<'e, C, R> ComponentAccess<'e, C, R>
+where
+    C: Component,
+    C::Storage: TrackedStorage<C>,
+    R: DerefMut<Target = MaskedStorage<C>>,
+{
+    pub fn set_track_modified(&mut self, flag: bool) {
+        self.storage.raw_storage_mut().set_track_modified(flag);
+    }
+
+    pub fn tracking_modified(&self) -> bool {
+        self.storage.raw_storage().tracking_modified()
+    }
+
+    pub fn modified_indexes(&self) -> &AtomicBitSet {
+        self.storage.raw_storage().modified()
+    }
+
+    pub fn clear_modified(&mut self) {
+        self.storage.raw_storage_mut().clear_modified();
     }
 }
 

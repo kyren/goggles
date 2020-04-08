@@ -1,13 +1,6 @@
-use std::{
-    cell::UnsafeCell,
-    collections::HashMap,
-    mem::{self, MaybeUninit},
-    ptr,
-};
+use std::{cell::UnsafeCell, collections::HashMap, mem::MaybeUninit, ptr};
 
-use hibitset::{BitIter, BitSet, BitSetLike};
-
-use crate::join::{Index, Join};
+use crate::join::Index;
 
 pub trait Component: Sized {
     type Storage: RawStorage<Self>;
@@ -22,16 +15,23 @@ pub trait Component: Sized {
 /// on drop.  In order to prevent this, the storage must have only empty indexes at the time of
 /// drop.
 pub trait RawStorage<C> {
-    /// Return a pointer to the component at the given index.
+    /// Return a reference to the component at the given index.
     ///
-    /// You *must* only call `ptr` with index values that are non-empty (have been previously had
-    /// components inserted with `insert`).
+    /// You *must* only call `get` with index values that are non-empty (have been previously had
+    /// components inserted with `insert`).  You must also *not* call `insert` or `remove` on this
+    /// index while there is a live reference to this component.
+    unsafe fn get(&self, index: Index) -> &C;
+
+    /// Return a mutable reference to the component at the given index.
     ///
-    /// Returns a *mutable* pointer to the previously inserted component.  You must follow Rust's
-    /// aliasing rules when dereferencing this pointer, so you must not let multiple `&mut`
-    /// references to the same component be alive at once.  You must also *not* call `insert` or
-    /// `remove` on this index if there is a live reference to the component.
-    unsafe fn ptr(&self, index: Index) -> *mut C;
+    /// You *must* only call `get_mut` with index values that are non-empty (have been previously
+    /// had components inserted with `insert`).
+    ///
+    /// Returns a *mutable* reference to the previously inserted component.  You must follow Rust's
+    /// aliasing rules here, so you must not call this method if there is any other live reference
+    /// to the same component.  You must also *not* call `insert` or `remove` on this index while
+    /// there is a live reference to the component.
+    unsafe fn get_mut(&self, index: Index) -> &mut C;
 
     /// Insert a new component value in the given index.
     ///
@@ -58,8 +58,12 @@ impl<C> Default for VecStorage<C> {
 }
 
 impl<C> RawStorage<C> for VecStorage<C> {
-    unsafe fn ptr(&self, index: Index) -> *mut C {
-        (*self.0.get_unchecked(index as usize).get()).as_mut_ptr()
+    unsafe fn get(&self, index: Index) -> &C {
+        &*(*self.0.get_unchecked(index as usize).get()).as_ptr()
+    }
+
+    unsafe fn get_mut(&self, index: Index) -> &mut C {
+        &mut *(*self.0.get_unchecked(index as usize).get()).as_mut_ptr()
     }
 
     unsafe fn insert(&mut self, index: Index, c: C) {
@@ -97,9 +101,14 @@ impl<C> Default for DenseVecStorage<C> {
 }
 
 impl<C> RawStorage<C> for DenseVecStorage<C> {
-    unsafe fn ptr(&self, index: Index) -> *mut C {
+    unsafe fn get(&self, index: Index) -> &C {
         let dind = *self.data.get_unchecked(index as usize).as_ptr();
-        self.values.get_unchecked(dind as usize).get()
+        &*self.values.get_unchecked(dind as usize).get()
+    }
+
+    unsafe fn get_mut(&self, index: Index) -> &mut C {
+        let dind = *self.data.get_unchecked(index as usize).as_ptr();
+        &mut *self.values.get_unchecked(dind as usize).get()
     }
 
     unsafe fn insert(&mut self, index: Index, c: C) {
@@ -143,8 +152,12 @@ impl<C> Default for HashMapStorage<C> {
 }
 
 impl<C> RawStorage<C> for HashMapStorage<C> {
-    unsafe fn ptr(&self, index: Index) -> *mut C {
-        self.0.get(&index).unwrap().get()
+    unsafe fn get(&self, index: Index) -> &C {
+        &*self.0.get(&index).unwrap().get()
+    }
+
+    unsafe fn get_mut(&self, index: Index) -> &mut C {
+        &mut *self.0.get(&index).unwrap().get()
     }
 
     unsafe fn insert(&mut self, index: Index, v: C) {
@@ -153,123 +166,5 @@ impl<C> RawStorage<C> for HashMapStorage<C> {
 
     unsafe fn remove(&mut self, index: Index) -> C {
         self.0.remove(&index).unwrap().into_inner()
-    }
-}
-
-/// Wraps a `RawStorage` for some component with a `BitSet` mask to provide a safe, `Join`-able
-/// interface for component storage.
-pub struct MaskedStorage<C: Component> {
-    mask: BitSet,
-    storage: C::Storage,
-}
-
-impl<C: Component> Default for MaskedStorage<C>
-where
-    C::Storage: Default,
-{
-    fn default() -> Self {
-        Self {
-            mask: Default::default(),
-            storage: Default::default(),
-        }
-    }
-}
-
-impl<C: Component> MaskedStorage<C> {
-    pub fn mask(&self) -> &BitSet {
-        &self.mask
-    }
-
-    pub fn storage(&self) -> &C::Storage {
-        &self.storage
-    }
-
-    pub fn storage_mut(&mut self) -> &mut C::Storage {
-        &mut self.storage
-    }
-
-    pub fn contains(&self, index: Index) -> bool {
-        self.mask.contains(index)
-    }
-
-    pub fn get(&self, index: Index) -> Option<&C> {
-        if self.mask.contains(index) {
-            Some(unsafe { &*self.storage.ptr(index) })
-        } else {
-            None
-        }
-    }
-
-    pub fn get_mut(&mut self, index: Index) -> Option<&mut C> {
-        if self.mask.contains(index) {
-            Some(unsafe { &mut *self.storage.ptr(index) })
-        } else {
-            None
-        }
-    }
-
-    pub fn insert(&mut self, index: Index, mut c: C) -> Option<C> {
-        if self.mask.contains(index) {
-            mem::swap(&mut c, unsafe { &mut *self.storage.ptr(index) });
-            Some(c)
-        } else {
-            self.mask.add(index);
-            unsafe { self.storage.insert(index, c) };
-            None
-        }
-    }
-
-    pub fn remove(&mut self, index: Index) -> Option<C> {
-        if self.mask.remove(index) {
-            Some(unsafe { self.storage.remove(index) })
-        } else {
-            None
-        }
-    }
-}
-
-impl<'a, C: Component> Join for &'a MaskedStorage<C> {
-    type Item = &'a C;
-    type Access = &'a C::Storage;
-    type Mask = &'a BitSet;
-
-    fn open(self) -> (Self::Mask, Self::Access) {
-        (&self.mask, &self.storage)
-    }
-
-    unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {
-        &*access.ptr(index)
-    }
-}
-
-impl<'a, C: Component> Join for &'a mut MaskedStorage<C> {
-    type Item = &'a mut C;
-    type Access = &'a C::Storage;
-    type Mask = &'a BitSet;
-
-    fn open(self) -> (Self::Mask, Self::Access) {
-        (&self.mask, &self.storage)
-    }
-
-    unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {
-        &mut *access.ptr(index)
-    }
-}
-
-impl<C: Component> Drop for MaskedStorage<C> {
-    fn drop(&mut self) {
-        struct DropGuard<'a, C: Component>(Option<BitIter<&'a BitSet>>, &'a mut C::Storage);
-
-        impl<'a, C: Component> Drop for DropGuard<'a, C> {
-            fn drop(&mut self) {
-                let mut iter = self.0.take().unwrap();
-                if let Some(index) = iter.next() {
-                    let mut guard: DropGuard<C> = DropGuard(Some(iter), self.1);
-                    unsafe { C::Storage::remove(&mut guard.1, index) };
-                }
-            }
-        }
-
-        DropGuard::<C>(Some((&self.mask).iter()), &mut self.storage);
     }
 }

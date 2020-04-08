@@ -1,6 +1,6 @@
 use goggles::{
     resource_set::{Read, ResourceSet, Write},
-    system_data::SystemData,
+    SystemData,
 };
 
 #[test]
