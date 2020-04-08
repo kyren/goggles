@@ -16,58 +16,75 @@ pub trait Join {
     type Mask: BitSetLike;
 
     fn open(self) -> (Self::Mask, Self::Access);
+
+    /// MUST be called only with indexes which are present in the mask returned along with the
+    /// access value from `Join::open`.
     unsafe fn get(access: &Self::Access, index: Index) -> Self::Item;
+}
+
+pub trait IntoJoin {
+    type Item;
+    type IntoJoin: Join<Item = Self::Item>;
+
+    fn into_join(self) -> Self::IntoJoin;
+}
+
+impl<J: Join> IntoJoin for J {
+    type Item = J::Item;
+    type IntoJoin = J;
+
+    fn into_join(self) -> Self::IntoJoin {
+        self
+    }
 }
 
 #[derive(Debug, Error)]
 #[error("cannot iterate over unconstrained Join")]
 pub struct JoinIterUnconstrained;
 
-pub trait JoinExt: Join {
-    fn join(self) -> JoinIter<Self>
+pub trait IntoJoinExt: IntoJoin {
+    fn join(self) -> JoinIter<Self::IntoJoin>
     where
         Self: Sized,
-        Self::Mask: BitSetConstrained,
+        <Self::IntoJoin as Join>::Mask: BitSetConstrained,
     {
-        JoinIter::new(self).unwrap()
+        JoinIter::new(self.into_join()).unwrap()
     }
 
-    fn join_unconstrained(self) -> JoinIter<Self>
+    fn join_unconstrained(self) -> JoinIter<Self::IntoJoin>
     where
         Self: Sized,
     {
-        JoinIter::new_unconstrained(self)
+        JoinIter::new_unconstrained(self.into_join())
     }
 
-    fn par_join(self) -> JoinParIter<Self>
+    fn par_join(self) -> JoinParIter<Self::IntoJoin>
     where
-        Self: Sized + Send,
+        Self: Sized + Send + Sync,
         Self::Item: Send,
-        Self::Access: Send + Sync,
-        Self::Mask: BitSetConstrained + Send + Sync,
+        <Self::IntoJoin as Join>::Mask: BitSetConstrained + Send + Sync,
     {
-        JoinParIter::new(self).unwrap()
+        JoinParIter::new(self.into_join()).unwrap()
     }
 
-    fn par_join_unconstrained(self) -> JoinParIter<Self>
+    fn par_join_unconstrained(self) -> JoinParIter<Self::IntoJoin>
     where
-        Self: Sized + Send,
+        Self: Sized + Send + Sync,
         Self::Item: Send,
-        Self::Access: Send + Sync,
-        Self::Mask: Send + Sync,
+        <Self::IntoJoin as Join>::Mask: Send + Sync,
     {
-        JoinParIter::new_unconstrained(self)
+        JoinParIter::new_unconstrained(self.into_join())
     }
 
-    fn maybe(self) -> MaybeJoin<Self>
+    fn maybe(self) -> MaybeJoin<Self::IntoJoin>
     where
         Self: Sized,
     {
-        MaybeJoin(self)
+        MaybeJoin(self.into_join())
     }
 }
 
-impl<J: Join> JoinExt for J {}
+impl<J: IntoJoin> IntoJoinExt for J {}
 
 pub struct MaybeJoin<J: Join>(pub J);
 
@@ -210,9 +227,13 @@ where
     }
 }
 
+/// If the inner type is a tuple of types which implement `Join`, then this type will implement
+/// `Join` all of them.
+pub struct JoinTuple<T>(T);
+
 macro_rules! define_join {
     ($first:ident $(, $rest:ident)*) => {
-        impl<$first, $($rest),*> Join for ($first, $($rest),*)
+        impl<$first, $($rest),*> Join for JoinTuple<($first, $($rest),*)>
         where
             $first: Join,
             $($rest: Join,)*
@@ -224,7 +245,7 @@ macro_rules! define_join {
 
             #[allow(non_snake_case)]
             fn open(self) -> (Self::Mask, Self::Access) {
-                let ($first, $($rest),*) = self;
+                let ($first, $($rest),*) = self.0;
                 let ($first, $($rest),*) = ($first.open(), $($rest.open()),*);
 
                 let mask = ($first.0, $($rest.0),*).and();
@@ -267,6 +288,52 @@ define_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, 
 define_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X}
 define_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y}
 define_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z}
+
+macro_rules! define_into_join {
+    ($first:ident $(, $rest:ident)*) => {
+        impl<$first, $($rest),*> IntoJoin for ($first, $($rest),*)
+        where
+            $first: IntoJoin,
+            $($rest: IntoJoin,)*
+        {
+            type Item = ($first::Item, $($rest::Item),*);
+            type IntoJoin = JoinTuple<(<$first as IntoJoin>::IntoJoin, $(<$rest as IntoJoin>::IntoJoin),*)>;
+
+            #[allow(non_snake_case)]
+            fn into_join(self) -> Self::IntoJoin {
+                let ($first, $($rest),*) = self;
+                JoinTuple(($first.into_join(), $($rest.into_join()),*))
+            }
+        }
+    };
+}
+
+define_into_join! {A}
+define_into_join! {A, B}
+define_into_join! {A, B, C}
+define_into_join! {A, B, C, D}
+define_into_join! {A, B, C, D, E}
+define_into_join! {A, B, C, D, E, F}
+define_into_join! {A, B, C, D, E, F, G}
+define_into_join! {A, B, C, D, E, F, G, H}
+define_into_join! {A, B, C, D, E, F, G, H, I}
+define_into_join! {A, B, C, D, E, F, G, H, I, J}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y}
+define_into_join! {A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z}
 
 pub trait BitAnd {
     type Value: BitSetLike;

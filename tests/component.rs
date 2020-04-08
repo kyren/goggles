@@ -2,7 +2,7 @@ use rayon::iter::ParallelIterator;
 
 use goggles::{
     component::{Component, DenseVecStorage, MaskedStorage, VecStorage},
-    join::JoinExt,
+    join::IntoJoinExt,
 };
 
 pub struct CompA(i32);

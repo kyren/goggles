@@ -1,6 +1,6 @@
 use goggles::{
     component::{Component, VecStorage},
-    join::JoinExt,
+    join::IntoJoinExt,
     world::{ReadComponent, ReadEntities, ReadResource, World, WriteComponent, WriteResource},
 };
 

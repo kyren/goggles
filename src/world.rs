@@ -10,7 +10,7 @@ use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 use crate::{
     component::{Component, MaskedStorage},
     entity::{Allocator, Entity, Index, LiveBitSet, WrongGeneration},
-    join::Join,
+    join::IntoJoin,
     par_seq::{ResourceConflict, RwResources},
     resource_set::ResourceSet,
     system_data::SystemData,
@@ -190,20 +190,15 @@ where
     }
 }
 
-impl<'a, R> Join for &'a EntitiesAccess<R>
+impl<'a, R> IntoJoin for &'a EntitiesAccess<R>
 where
     R: Deref<Target = Entities>,
 {
-    type Item = <&'a Allocator as Join>::Item;
-    type Access = <&'a Allocator as Join>::Access;
-    type Mask = <&'a Allocator as Join>::Mask;
+    type Item = Entity;
+    type IntoJoin = &'a Allocator;
 
-    fn open(self) -> (Self::Mask, Self::Access) {
-        <&Allocator as Join>::open(&(*self.0).0)
-    }
-
-    unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {
-        <&Allocator as Join>::get(access, index)
+    fn into_join(self) -> Self::IntoJoin {
+        &(self.0).0
     }
 }
 
@@ -376,39 +371,29 @@ where
     }
 }
 
-impl<'a, C, R> Join for &'a ComponentAccess<'a, C, R>
+impl<'a, C, R> IntoJoin for &'a ComponentAccess<'a, C, R>
 where
     C: Component,
     R: Deref<Target = MaskedStorage<C>> + 'a,
 {
-    type Item = <&'a MaskedStorage<C> as Join>::Item;
-    type Access = <&'a MaskedStorage<C> as Join>::Access;
-    type Mask = <&'a MaskedStorage<C> as Join>::Mask;
+    type Item = &'a C;
+    type IntoJoin = &'a MaskedStorage<C>;
 
-    fn open(self) -> (Self::Mask, Self::Access) {
-        <&MaskedStorage<C>>::open(&self.storage)
-    }
-
-    unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {
-        <&MaskedStorage<C>>::get(access, index)
+    fn into_join(self) -> Self::IntoJoin {
+        (&*self.storage).into_join()
     }
 }
 
-impl<'a, C, R> Join for &'a mut ComponentAccess<'a, C, R>
+impl<'a, C, R> IntoJoin for &'a mut ComponentAccess<'a, C, R>
 where
     C: Component,
     R: DerefMut<Target = MaskedStorage<C>> + 'a,
 {
-    type Item = <&'a mut MaskedStorage<C> as Join>::Item;
-    type Access = <&'a mut MaskedStorage<C> as Join>::Access;
-    type Mask = <&'a mut MaskedStorage<C> as Join>::Mask;
+    type Item = &'a mut C;
+    type IntoJoin = &'a mut MaskedStorage<C>;
 
-    fn open(self) -> (Self::Mask, Self::Access) {
-        <&mut MaskedStorage<C>>::open(&mut self.storage)
-    }
-
-    unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {
-        <&mut MaskedStorage<C>>::get(access, index)
+    fn into_join(self) -> Self::IntoJoin {
+        (&mut *self.storage).into_join()
     }
 }
 
