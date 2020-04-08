@@ -4,7 +4,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
+use atomic_refcell::{AtomicRef, AtomicRefMut};
 
 use crate::{
     component::{Component, MaskedStorage},
@@ -17,7 +17,7 @@ use crate::{
 
 #[derive(Default)]
 pub struct World {
-    allocator: AtomicRefCell<Allocator>,
+    allocator: Allocator,
     resources: ResourceSet,
     components: ResourceSet,
     remove_components: HashMap<TypeId, Box<dyn Fn(&ResourceSet, &[Entity]) + Send + Sync>>,
@@ -27,7 +27,7 @@ pub struct World {
 impl World {
     pub fn new() -> Self {
         World {
-            allocator: AtomicRefCell::default(),
+            allocator: Allocator::new(),
             resources: ResourceSet::new(),
             components: ResourceSet::new(),
             remove_components: HashMap::new(),
@@ -36,15 +36,19 @@ impl World {
     }
 
     pub fn entities(&self) -> Entities {
-        Entities(self.allocator.borrow())
+        Entities(&self.allocator)
+    }
+
+    pub fn create_entity_atomic(&self) -> Entity {
+        self.allocator.allocate_atomic()
     }
 
     pub fn create_entity(&mut self) -> Entity {
-        self.allocator.get_mut().allocate()
+        self.allocator.allocate()
     }
 
     pub fn delete_entity(&mut self, e: Entity) -> Result<(), WrongGeneration> {
-        self.allocator.get_mut().kill(e)?;
+        self.allocator.kill(e)?;
         for remove_component in self.remove_components.values() {
             remove_component(&self.components, &[e]);
         }
@@ -140,7 +144,7 @@ impl World {
     {
         ComponentAccess {
             storage: self.components.get_mut(),
-            entities: Entities(self.allocator.borrow()),
+            entities: Entities(&self.allocator),
         }
     }
 
@@ -158,7 +162,7 @@ impl World {
     ///
     /// No entity is actually removed until this method is called.
     pub fn merge_atomic(&mut self) {
-        self.allocator.get_mut().merge_atomic(&mut self.killed);
+        self.allocator.merge_atomic(&mut self.killed);
         for remove_component in self.remove_components.values() {
             remove_component(&self.components, &self.killed);
         }
@@ -192,7 +196,7 @@ pub enum WorldResourceId {
 
 pub type WorldResources = RwResources<WorldResourceId>;
 
-pub struct Entities<'a>(AtomicRef<'a, Allocator>);
+pub struct Entities<'a>(&'a Allocator);
 
 impl<'a> Entities<'a> {
     /// Atomically request that this entity be removed on the next call to `World::merge_atomic`.
@@ -303,16 +307,16 @@ where
     }
 }
 
-pub struct ComponentAccess<'a, C, R>
+pub struct ComponentAccess<'e, C, R>
 where
     C: Component,
     R: Deref<Target = MaskedStorage<C>>,
 {
-    entities: Entities<'a>,
+    entities: Entities<'e>,
     storage: R,
 }
 
-impl<'a, C, R> ComponentAccess<'a, C, R>
+impl<'e, C, R> ComponentAccess<'e, C, R>
 where
     C: Component,
     R: Deref<Target = MaskedStorage<C>>,
@@ -338,7 +342,7 @@ where
     }
 }
 
-impl<'a, C, R> ComponentAccess<'a, C, R>
+impl<'e, C, R> ComponentAccess<'e, C, R>
 where
     C: Component,
     R: DerefMut<Target = MaskedStorage<C>>,
@@ -372,7 +376,7 @@ where
     }
 }
 
-impl<'a, C, R> IntoJoin for &'a ComponentAccess<'a, C, R>
+impl<'a, 'e, C, R> IntoJoin for &'a ComponentAccess<'e, C, R>
 where
     C: Component,
     R: Deref<Target = MaskedStorage<C>> + 'a,
@@ -385,7 +389,7 @@ where
     }
 }
 
-impl<'a, C, R> IntoJoin for &'a mut ComponentAccess<'a, C, R>
+impl<'a, 'e, C, R> IntoJoin for &'a mut ComponentAccess<'e, C, R>
 where
     C: Component,
     R: DerefMut<Target = MaskedStorage<C>> + 'a,
