@@ -80,13 +80,13 @@ impl Allocator {
         self.killed_atomic.remove(entity.index);
 
         // If this entity is alive atomically and we're killing it non-atomically, we must commit
-        // the entity as having been added then killed, so it can properly go into the cache.
+        // the entity as having been added then killed so it can properly go into the cache.
 
         self.update_generation_length();
         let generation = &mut self.generations[entity.index as usize];
 
         if self.raised_atomic.remove(entity.index) {
-            *generation = generation.raised().to_generation();
+            *generation = generation.raised().generation();
         }
         *generation = generation.killed();
         self.cache.push(entity.index);
@@ -153,7 +153,7 @@ impl Allocator {
 
         let generation = &mut self.generations[index as usize];
         let raised = generation.raised();
-        *generation = raised.to_generation();
+        *generation = raised.generation();
         Entity::new(index, raised)
     }
 
@@ -197,7 +197,7 @@ impl Allocator {
 
         for index in (&self.raised_atomic).iter() {
             let generation = &mut self.generations[index as usize];
-            *generation = generation.raised().to_generation();
+            *generation = generation.raised().generation();
             self.alive.add(index);
         }
         self.raised_atomic.clear();
@@ -342,7 +342,7 @@ impl Generation {
 
 // A generation that is guaranteed to be alive.
 //
-// Since the generation id cannot be 0, this nables layout optimizations.
+// Since the generation id cannot be 0, this can use `NZGenId` and enable layout optimizations.
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 struct AliveGeneration(NZGenId);
 
@@ -351,7 +351,7 @@ impl AliveGeneration {
         self.0.get()
     }
 
-    fn to_generation(self) -> Generation {
+    fn generation(self) -> Generation {
         Generation(self.0.get())
     }
 }
