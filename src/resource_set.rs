@@ -60,7 +60,8 @@ impl ResourceSet {
     }
 
     pub fn get_mut<T>(&mut self) -> &mut T
-        where T: 'static,
+    where
+        T: 'static,
     {
         if let Some(r) = self.resources.get_mut(&ResourceId::of::<T>()) {
             r.get_mut().downcast_mut::<Resource<T>>().unwrap().get_mut()
