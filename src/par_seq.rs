@@ -2,7 +2,7 @@ use std::{any::type_name, collections::HashSet, hash::Hash};
 
 use thiserror::Error;
 
-/// Trait for identifying resources that are used in a in a `System`
+/// Trait for identifying resources that are used in a `System`
 pub trait Resources: Default {
     /// Union this set of resources with the given set of resources.
     fn union(&mut self, other: &Self);
