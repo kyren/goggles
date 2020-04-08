@@ -53,6 +53,10 @@ impl<J: Join> IntoJoin for J {
 pub struct JoinIterUnconstrained;
 
 pub trait IntoJoinExt: IntoJoin {
+    /// Safely iterate over this `Join`.
+    ///
+    /// # Panics
+    /// Panics if the result of this join is unconstrained.
     fn join(self) -> JoinIter<Self::IntoJoin>
     where
         Self: Sized,
@@ -61,6 +65,9 @@ pub trait IntoJoinExt: IntoJoin {
         JoinIter::new(self.into_join()).unwrap()
     }
 
+    /// Safely iterate over this `Join`, and don't panic if it is unconstrained.
+    ///
+    /// Constraint detection is not perfect, so this is here if it is in your way.
     fn join_unconstrained(self) -> JoinIter<Self::IntoJoin>
     where
         Self: Sized,
@@ -68,6 +75,10 @@ pub trait IntoJoinExt: IntoJoin {
         JoinIter::new_unconstrained(self.into_join())
     }
 
+    /// Safely iterate over this `Join` in parallel.
+    ///
+    /// # Panics
+    /// Panics if the result of this join is unconstrained.
     fn par_join(self) -> JoinParIter<Self::IntoJoin>
     where
         Self: Sized + Send + Sync,
@@ -77,6 +88,9 @@ pub trait IntoJoinExt: IntoJoin {
         JoinParIter::new(self.into_join()).unwrap()
     }
 
+    /// Safely iterate over this `Join` in parallel, and don't panic if it is unconstrained.
+    ///
+    /// Constraint detection is not perfect, so this is here if it is in your way.
     fn par_join_unconstrained(self) -> JoinParIter<Self::IntoJoin>
     where
         Self: Sized + Send + Sync,
@@ -452,6 +466,13 @@ define_bit_join!(impl<'a, A, B> for &'a BitSetOr<A, B>);
 define_bit_join!(impl<A, B> for BitSetXor<A, B>);
 define_bit_join!(impl<'a> for &'a dyn BitSetLike);
 
+/// A bitmask is considered "constrained" if it is a `BitSet`, `AtomicBitSet`, or a reference to a
+/// "constrained" bitset, and according to the following rules:
+///
+/// * A `BitSetAll` is unconstrained.
+/// * A `BitSetNot` is constrained if its inner type is unconstrained, and vice versa.
+/// * A `BitSetAnd` is constrained if either of its inner sets is constrained.
+/// * A `BitSetOr` or `BitSetXor` is constrained if *both* of its inner sets are constrained.
 pub trait BitSetConstrained: BitSetLike {
     fn is_constrained(&self) -> bool;
 }
