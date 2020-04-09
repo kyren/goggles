@@ -398,18 +398,25 @@ impl<'e, C, R> ComponentAccess<'e, C, R>
 where
     C: Component,
     C::Storage: TrackedStorage<C>,
-    R: DerefMut<Target = MaskedStorage<C>>,
+    R: Deref<Target = MaskedStorage<C>>,
 {
-    pub fn set_track_modified(&mut self, flag: bool) {
-        self.storage.raw_storage_mut().set_track_modified(flag);
-    }
-
     pub fn tracking_modified(&self) -> bool {
         self.storage.raw_storage().tracking_modified()
     }
 
     pub fn modified_indexes(&self) -> &AtomicBitSet {
         self.storage.raw_storage().modified()
+    }
+}
+
+impl<'e, C, R> ComponentAccess<'e, C, R>
+where
+    C: Component,
+    C::Storage: TrackedStorage<C>,
+    R: DerefMut<Target = MaskedStorage<C>>,
+{
+    pub fn set_track_modified(&mut self, flag: bool) {
+        self.storage.raw_storage_mut().set_track_modified(flag);
     }
 
     pub fn clear_modified(&mut self) {
