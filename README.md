@@ -4,6 +4,8 @@
 
 ---
 
+[![Build Status](https://img.shields.io/circleci/project/github/kyren/goggles.svg)](https://circleci.com/gh/kyren/goggles)
+
 This crate is a heavily modified, stripped down version of the `specs` ECS
 library.  It is less of a framework for doing a specific style of ECS as easily
 as possible and more of a DIY library for doing ECS that will require you to
