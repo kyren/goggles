@@ -1,4 +1,4 @@
-use std::mem::{self};
+use std::mem;
 
 use hibitset::{BitIter, BitSet, BitSetLike};
 
@@ -134,19 +134,25 @@ impl<'a, C: Component> Join for &'a mut MaskedStorage<C> {
 
 impl<C: Component> Drop for MaskedStorage<C> {
     fn drop(&mut self) {
-        struct DropGuard<'a, C: Component>(Option<BitIter<&'a BitSet>>, &'a mut C::Storage);
+        struct DropGuard<'a, 'b, C: Component>(
+            Option<&'b mut BitIter<&'a BitSet>>,
+            &'b mut C::Storage,
+        );
 
-        impl<'a, C: Component> Drop for DropGuard<'a, C> {
+        impl<'a, 'b, C: Component> Drop for DropGuard<'a, 'b, C> {
             fn drop(&mut self) {
-                let mut iter = self.0.take().unwrap();
-                if let Some(index) = iter.next() {
-                    let mut guard: DropGuard<C> = DropGuard(Some(iter), self.1);
-                    unsafe { C::Storage::remove(&mut guard.1, index) };
+                if let Some(iter) = self.0.take() {
+                    let mut guard: DropGuard<C> = DropGuard(Some(&mut *iter), &mut *self.1);
+                    while let Some(index) = guard.0.as_mut().unwrap().next() {
+                        unsafe { C::Storage::remove(&mut guard.1, index) };
+                    }
+                    guard.0 = None;
                 }
             }
         }
 
-        DropGuard::<C>(Some((&self.mask).iter()), &mut self.storage);
+        let mut iter = (&self.mask).iter();
+        DropGuard::<C>(Some(&mut iter), &mut self.storage);
     }
 }
 
