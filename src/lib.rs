@@ -1,3 +1,6 @@
+pub use hibitset;
+pub use rayon;
+
 pub mod component;
 pub mod entity;
 pub mod join;
