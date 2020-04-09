@@ -36,16 +36,6 @@ jobs:
       - run:
           name: Run all tests
           command: cargo test --all
-      - run:
-          name: Run all tests under miri
-          command: |
-            cargo +nightly miri test -- -- --skip nomiri
-      - run:
-          name: Run all tests under sanitizers
-          command: |
-            RUSTFLAGS="-Z sanitizer=address" cargo +nightly -Z build-std test --target x86_64-unknown-linux-gnu
-            RUSTFLAGS="-Z sanitizer=leak" cargo +nightly test -Z build-std --target x86_64-unknown-linux-gnu
-            RUSTFLAGS="-Z sanitizer=memory" cargo +nightly test -Z build-std --target x86_64-unknown-linux-gnu
       - save_cache:
           paths:
             - /usr/local/cargo/registry
