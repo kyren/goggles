@@ -99,6 +99,10 @@ impl<C: Component> MaskedStorage<C> {
         }
     }
 
+    /// Returns an `IntoJoin` type whose values are `GuardedJoin` wrappers.
+    ///
+    /// A `GuardedJoin` wrapper does not automatically call `RawStorage::get_mut`, so it can be
+    /// useful to avoid flagging modifications with a `FlaggedStorage`.
     pub fn guard(&mut self) -> GuardedJoin<C> {
         GuardedJoin(self)
     }

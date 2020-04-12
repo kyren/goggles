@@ -61,13 +61,15 @@ pub struct ResourceConflict {
 // }
 // ```
 //
+// This would allow dropping the `World` associated type and would be much more general, allowing
+// you to pass arbitrary non-'static arguments as parameters to `System::run` if your systems
+// implement `for<'a> System<'a>`.
+
 // However, when we implement this `System` trait for `Par` and `Seq` and try to use this with more
 // than a few systems, we unfortunately run into quadratic or exponential Rust compiler behavior
 // (Maybe this bug: https://github.com/rust-lang/rust/issues/69671).
 //
-// This would allow dropping the `World` associated type and would be much more general, allowing
-// you to pass arbitrary non-'static arguments as parameters to `System::run` if your systems
-// implement `for<'a> System<'a>`.
+// When this issue is fixed this trait should be changed.
 pub trait System {
     type World: ?Sized;
     type Resources: Resources;

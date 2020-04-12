@@ -72,6 +72,17 @@ impl World {
         self.resources.remove::<R>()
     }
 
+    pub fn contains_resource<T>(&self) -> bool
+    where
+        T: Send + 'static,
+    {
+        self.resources.contains::<T>()
+    }
+
+    /// Borrow the given resource immutably.
+    ///
+    /// # Panics
+    /// Panics if the resource has not been inserted or is already borrowed mutably.
     pub fn read_resource<R>(&self) -> ReadResource<R>
     where
         R: Send + Sync + 'static,
@@ -79,6 +90,10 @@ impl World {
         ResourceAccess(self.resources.borrow())
     }
 
+    /// Borrow the given resource mutably.
+    ///
+    /// # Panics
+    /// Panics if the resource has not been inserted or is already borrowed.
     pub fn write_resource<R>(&self) -> WriteResource<R>
     where
         R: Send + 'static,
@@ -86,6 +101,8 @@ impl World {
         ResourceAccess(self.resources.borrow_mut())
     }
 
+    /// # Panics
+    /// Panics if the resource has not been inserted.
     pub fn get_resource_mut<R>(&mut self) -> &mut R
     where
         R: 'static,
@@ -93,6 +110,9 @@ impl World {
         self.resources.get_mut()
     }
 
+    /// Insert a new, fresh storage for the given component.
+    ///
+    /// If the component was already inserted, this will clear the storage for the component first.
     pub fn insert_component<C>(&mut self) -> Option<MaskedStorage<C>>
     where
         C: Component + 'static,
@@ -110,6 +130,7 @@ impl World {
         self.components.insert(MaskedStorage::<C>::default())
     }
 
+    /// Remove storage for the given component.
     pub fn remove_component<C>(&mut self) -> Option<MaskedStorage<C>>
     where
         C: Component + 'static,
@@ -119,6 +140,18 @@ impl World {
         self.components.remove::<MaskedStorage<C>>()
     }
 
+    pub fn contains_component<C>(&self) -> bool
+    where
+        C: Component + 'static,
+        C::Storage: Send,
+    {
+        self.components.contains::<MaskedStorage<C>>()
+    }
+
+    /// Borrow the given component immutably.
+    ///
+    /// # Panics
+    /// Panics if the component has not been inserted or is already borrowed mutably.
     pub fn read_component<C>(&self) -> ReadComponent<C>
     where
         C: Component + 'static,
@@ -130,6 +163,10 @@ impl World {
         }
     }
 
+    /// Borrow the given component mutably.
+    ///
+    /// # Panics
+    /// Panics if the component has not been inserted or is already borrowed.
     pub fn write_component<C>(&self) -> WriteComponent<C>
     where
         C: Component + 'static,
@@ -141,6 +178,8 @@ impl World {
         }
     }
 
+    /// # Panics
+    /// Panics if the component has not been inserted.
     pub fn get_component_mut<C>(&mut self) -> ComponentAccess<C, &mut MaskedStorage<C>>
     where
         C: Component + 'static,
@@ -274,6 +313,10 @@ where
     }
 }
 
+/// `SystemData` type that reads the given resource.
+///
+/// # Panics
+/// Panics if the resource does not exist or has already been borrowed for writing.
 pub type ReadResource<'a, R> = ResourceAccess<AtomicRef<'a, R>>;
 
 impl<'a, R> SystemData<'a> for ReadResource<'a, R>
@@ -292,6 +335,10 @@ where
     }
 }
 
+/// `SystemData` type that writes the given resource.
+///
+/// # Panics
+/// Panics if the resource does not exist or has already been borrowed for writing.
 pub type WriteResource<'a, R> = ResourceAccess<AtomicRefMut<'a, R>>;
 
 impl<'a, R> SystemData<'a> for WriteResource<'a, R>
@@ -310,6 +357,11 @@ where
     }
 }
 
+/// Returned from the `World` methods `read_component`, `write_component`, and `get_component_mut`.
+///
+/// This is a simple wrapper around a `MaskedStorage` paired with an entity `Allocator`.  It
+/// prevents you from inserting or accessing components that do not have a live `Entity` associated
+/// with them.
 pub struct ComponentAccess<'e, C, R>
 where
     C: Component,
@@ -350,6 +402,12 @@ where
     C: Component,
     R: DerefMut<Target = MaskedStorage<C>>,
 {
+    /// Access the inner `MaskedStorage` type.
+    ///
+    /// It is possible by using this type directly to insert components into the underlying
+    /// `MaskedStorage` for indexes that do not have a live `Entity` associated with them.  This is
+    /// not unsafe to do, but it is probably incorrect, and such components may either never be
+    /// automatically removed or possibly be assigned to new entities that have the same index.
     pub fn storage_mut(&mut self) -> &mut MaskedStorage<C> {
         &mut self.storage
     }
@@ -450,6 +508,10 @@ where
     }
 }
 
+/// `SystemData` type that reads the given component.
+///
+/// # Panics
+/// Panics if the component does not exist or has already been borrowed for writing.
 pub type ReadComponent<'a, C> = ComponentAccess<'a, C, AtomicRef<'a, MaskedStorage<C>>>;
 
 impl<'a, C> SystemData<'a> for ReadComponent<'a, C>
@@ -471,6 +533,10 @@ where
     }
 }
 
+/// `SystemData` type that writes the given component.
+///
+/// # Panics
+/// Panics if the component does not exist or has already been borrowed for writing.
 pub type WriteComponent<'a, C> = ComponentAccess<'a, C, AtomicRefMut<'a, MaskedStorage<C>>>;
 
 impl<'a, C> SystemData<'a> for WriteComponent<'a, C>

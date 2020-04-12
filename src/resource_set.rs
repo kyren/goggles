@@ -13,6 +13,8 @@ use crate::{
     system_data::SystemData,
 };
 
+/// Store a set of arbitrary types inside `AtomicRefCell`s, and then access them for either reading
+/// or writing.
 #[derive(Default)]
 pub struct ResourceSet {
     resources: HashMap<ResourceId, AtomicRefCell<Box<dyn Any + Send + Sync>>>,
@@ -40,13 +42,6 @@ impl ResourceSet {
             })
     }
 
-    pub fn contains<T>(&self) -> bool
-    where
-        T: Send + 'static,
-    {
-        self.resources.contains_key(&ResourceId::of::<T>())
-    }
-
     pub fn remove<T>(&mut self) -> Option<T>
     where
         T: Send + 'static,
@@ -59,15 +54,11 @@ impl ResourceSet {
         })
     }
 
-    pub fn get_mut<T>(&mut self) -> &mut T
+    pub fn contains<T>(&self) -> bool
     where
-        T: 'static,
+        T: Send + 'static,
     {
-        if let Some(r) = self.resources.get_mut(&ResourceId::of::<T>()) {
-            r.get_mut().downcast_mut::<Resource<T>>().unwrap().get_mut()
-        } else {
-            panic!("no such resource {:?}", type_name::<T>());
-        }
+        self.resources.contains_key(&ResourceId::of::<T>())
     }
 
     /// Borrow the given resource immutably.
@@ -104,6 +95,19 @@ impl ResourceSet {
         }
     }
 
+    /// # Panics
+    /// Panics if the resource has not been inserted.
+    pub fn get_mut<T>(&mut self) -> &mut T
+    where
+        T: 'static,
+    {
+        if let Some(r) = self.resources.get_mut(&ResourceId::of::<T>()) {
+            r.get_mut().downcast_mut::<Resource<T>>().unwrap().get_mut()
+        } else {
+            panic!("no such resource {:?}", type_name::<T>());
+        }
+    }
+
     /// Fetch the given `SystemData`.
     pub fn fetch<'a, S>(&'a self) -> S
     where
@@ -122,6 +126,10 @@ impl ResourceId {
     }
 }
 
+/// `SystemData` type that reads the given resource.
+///
+/// # Panics
+/// Panics if the resource does not exist or has already been borrowed for writing.
 pub struct Read<'a, T>(AtomicRef<'a, T>);
 
 impl<'a, T> SystemData<'a> for Read<'a, T>
@@ -151,6 +159,10 @@ impl<'a, T> Deref for Read<'a, T> {
     }
 }
 
+/// `SystemData` type that writes the given resource.
+///
+/// # Panics
+/// Panics if the resource does not exist or has already been borrowed for writing.
 pub struct Write<'a, T>(AtomicRefMut<'a, T>);
 
 impl<'a, T> SystemData<'a> for Write<'a, T>
