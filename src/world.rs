@@ -1,6 +1,7 @@
 use std::{
     any::TypeId,
     collections::HashMap,
+    marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
@@ -8,15 +9,22 @@ use atomic_refcell::{AtomicRef, AtomicRefMut};
 use hibitset::AtomicBitSet;
 
 use crate::{
-    component::Component,
     entity::{Allocator, Entity, LiveBitSet, WrongGeneration},
     join::{Index, IntoJoin},
     masked::{GuardedJoin, MaskedStorage},
     par_seq::{ResourceConflict, RwResources},
     resource_set::ResourceSet,
+    storage::RawStorage,
     system_data::SystemData,
     tracked::TrackedStorage,
 };
+
+/// A trait for component types that associates their storage type with the component type itself.
+pub trait Component: Sized {
+    type Storage: RawStorage<Item = Self>;
+}
+
+pub type ComponentStorage<C> = MaskedStorage<<C as Component>::Storage>;
 
 #[derive(Default)]
 pub struct World {
@@ -113,7 +121,7 @@ impl World {
     /// Insert a new, fresh storage for the given component.
     ///
     /// If the component was already inserted, this will clear the storage for the component first.
-    pub fn insert_component<C>(&mut self) -> Option<MaskedStorage<C>>
+    pub fn insert_component<C>(&mut self) -> Option<ComponentStorage<C>>
     where
         C: Component + 'static,
         C::Storage: Default + Send,
@@ -121,23 +129,23 @@ impl World {
         self.remove_components.insert(
             TypeId::of::<C>(),
             Box::new(|resource_set, entities| {
-                let mut storage = resource_set.borrow_mut::<MaskedStorage<C>>();
+                let mut storage = resource_set.borrow_mut::<ComponentStorage<C>>();
                 for e in entities {
                     storage.remove(e.index());
                 }
             }),
         );
-        self.components.insert(MaskedStorage::<C>::default())
+        self.components.insert(ComponentStorage::<C>::default())
     }
 
     /// Remove storage for the given component.
-    pub fn remove_component<C>(&mut self) -> Option<MaskedStorage<C>>
+    pub fn remove_component<C>(&mut self) -> Option<ComponentStorage<C>>
     where
         C: Component + 'static,
         C::Storage: Default + Send,
     {
         self.remove_components.remove(&TypeId::of::<C>());
-        self.components.remove::<MaskedStorage<C>>()
+        self.components.remove::<ComponentStorage<C>>()
     }
 
     pub fn contains_component<C>(&self) -> bool
@@ -145,7 +153,7 @@ impl World {
         C: Component + 'static,
         C::Storage: Send,
     {
-        self.components.contains::<MaskedStorage<C>>()
+        self.components.contains::<ComponentStorage<C>>()
     }
 
     /// Borrow the given component immutably.
@@ -160,6 +168,7 @@ impl World {
         ComponentAccess {
             storage: self.components.borrow(),
             entities: self.entities(),
+            marker: PhantomData,
         }
     }
 
@@ -175,18 +184,20 @@ impl World {
         ComponentAccess {
             storage: self.components.borrow_mut(),
             entities: self.entities(),
+            marker: PhantomData,
         }
     }
 
     /// # Panics
     /// Panics if the component has not been inserted.
-    pub fn get_component_mut<C>(&mut self) -> ComponentAccess<C, &mut MaskedStorage<C>>
+    pub fn get_component_mut<C>(&mut self) -> ComponentAccess<C, &mut ComponentStorage<C>>
     where
         C: Component + 'static,
     {
         ComponentAccess {
             storage: self.components.get_mut(),
             entities: Entities(&self.allocator),
+            marker: PhantomData,
         }
     }
 
@@ -362,25 +373,25 @@ where
 /// This is a simple wrapper around a `MaskedStorage` paired with an entity `Allocator`.  It
 /// prevents you from inserting or accessing components that do not have a live `Entity` associated
 /// with them.
-pub struct ComponentAccess<'e, C, R>
+pub struct ComponentAccess<'a, C, R>
 where
     C: Component,
-    R: Deref<Target = MaskedStorage<C>>,
 {
-    entities: Entities<'e>,
+    entities: Entities<'a>,
     storage: R,
+    marker: PhantomData<C>,
 }
 
-impl<'e, C, R> ComponentAccess<'e, C, R>
+impl<'a, C, R> ComponentAccess<'a, C, R>
 where
     C: Component,
-    R: Deref<Target = MaskedStorage<C>>,
+    R: Deref<Target = ComponentStorage<C>>,
 {
     pub fn entities(&self) -> &Entities {
         &self.entities
     }
 
-    pub fn storage(&self) -> &MaskedStorage<C> {
+    pub fn storage(&self) -> &ComponentStorage<C> {
         &self.storage
     }
 
@@ -397,10 +408,10 @@ where
     }
 }
 
-impl<'e, C, R> ComponentAccess<'e, C, R>
+impl<'a, C, R> ComponentAccess<'a, C, R>
 where
     C: Component,
-    R: DerefMut<Target = MaskedStorage<C>>,
+    R: DerefMut<Target = ComponentStorage<C>>,
 {
     /// Access the inner `MaskedStorage` type.
     ///
@@ -408,7 +419,7 @@ where
     /// `MaskedStorage` for indexes that do not have a live `Entity` associated with them.  This is
     /// not unsafe to do, but it is probably incorrect, and such components may either never be
     /// automatically removed or possibly be assigned to new entities that have the same index.
-    pub fn storage_mut(&mut self) -> &mut MaskedStorage<C> {
+    pub fn storage_mut(&mut self) -> &mut ComponentStorage<C> {
         &mut self.storage
     }
 
@@ -447,16 +458,16 @@ where
         }
     }
 
-    pub fn guard(&mut self) -> GuardedJoin<C> {
+    pub fn guard(&mut self) -> GuardedJoin<C::Storage> {
         self.storage.guard()
     }
 }
 
-impl<'e, C, R> ComponentAccess<'e, C, R>
+impl<'a, C, R> ComponentAccess<'a, C, R>
 where
     C: Component,
-    C::Storage: TrackedStorage<C>,
-    R: Deref<Target = MaskedStorage<C>>,
+    C::Storage: TrackedStorage,
+    R: Deref<Target = ComponentStorage<C>>,
 {
     pub fn tracking_modified(&self) -> bool {
         self.storage.raw_storage().tracking_modified()
@@ -467,11 +478,11 @@ where
     }
 }
 
-impl<'e, C, R> ComponentAccess<'e, C, R>
+impl<'a, C, R> ComponentAccess<'a, C, R>
 where
     C: Component,
-    C::Storage: TrackedStorage<C>,
-    R: DerefMut<Target = MaskedStorage<C>>,
+    C::Storage: TrackedStorage,
+    R: DerefMut<Target = ComponentStorage<C>>,
 {
     pub fn set_track_modified(&mut self, flag: bool) {
         self.storage.raw_storage_mut().set_track_modified(flag);
@@ -482,26 +493,26 @@ where
     }
 }
 
-impl<'a, 'e, C, R> IntoJoin for &'a ComponentAccess<'e, C, R>
+impl<'a, 'b, C, R> IntoJoin for &'a ComponentAccess<'b, C, R>
 where
     C: Component,
-    R: Deref<Target = MaskedStorage<C>> + 'a,
+    R: Deref<Target = ComponentStorage<C>> + 'a,
 {
     type Item = &'a C;
-    type IntoJoin = &'a MaskedStorage<C>;
+    type IntoJoin = &'a ComponentStorage<C>;
 
     fn into_join(self) -> Self::IntoJoin {
         (&*self.storage).into_join()
     }
 }
 
-impl<'a, 'e, C, R> IntoJoin for &'a mut ComponentAccess<'e, C, R>
+impl<'a, 'b, C, R> IntoJoin for &'a mut ComponentAccess<'b, C, R>
 where
     C: Component,
-    R: DerefMut<Target = MaskedStorage<C>> + 'a,
+    R: DerefMut<Target = ComponentStorage<C>> + 'a,
 {
     type Item = &'a mut C;
-    type IntoJoin = &'a mut MaskedStorage<C>;
+    type IntoJoin = &'a mut ComponentStorage<C>;
 
     fn into_join(self) -> Self::IntoJoin {
         (&mut *self.storage).into_join()
@@ -512,7 +523,7 @@ where
 ///
 /// # Panics
 /// Panics if the component does not exist or has already been borrowed for writing.
-pub type ReadComponent<'a, C> = ComponentAccess<'a, C, AtomicRef<'a, MaskedStorage<C>>>;
+pub type ReadComponent<'a, C> = ComponentAccess<'a, C, AtomicRef<'a, ComponentStorage<C>>>;
 
 impl<'a, C> SystemData<'a> for ReadComponent<'a, C>
 where
@@ -537,7 +548,7 @@ where
 ///
 /// # Panics
 /// Panics if the component does not exist or has already been borrowed for writing.
-pub type WriteComponent<'a, C> = ComponentAccess<'a, C, AtomicRefMut<'a, MaskedStorage<C>>>;
+pub type WriteComponent<'a, C> = ComponentAccess<'a, C, AtomicRefMut<'a, ComponentStorage<C>>>;
 
 impl<'a, C> SystemData<'a> for WriteComponent<'a, C>
 where

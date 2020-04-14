@@ -3,21 +3,18 @@ use std::mem;
 use hibitset::{BitIter, BitSet, BitSetLike};
 
 use crate::{
-    component::{Component, RawStorage},
     join::{Index, Join},
+    storage::RawStorage,
 };
 
 /// Wraps a `RawStorage` for some component with a `BitSet` mask to provide a safe, `Join`-able
 /// interface for component storage.
-pub struct MaskedStorage<C: Component> {
+pub struct MaskedStorage<S: RawStorage> {
     mask: BitSet,
-    storage: C::Storage,
+    storage: S,
 }
 
-impl<C: Component> Default for MaskedStorage<C>
-where
-    C::Storage: Default,
-{
+impl<S: RawStorage + Default> Default for MaskedStorage<S> {
     fn default() -> Self {
         Self {
             mask: Default::default(),
@@ -26,16 +23,16 @@ where
     }
 }
 
-impl<C: Component> MaskedStorage<C> {
+impl<S: RawStorage> MaskedStorage<S> {
     pub fn mask(&self) -> &BitSet {
         &self.mask
     }
 
-    pub fn raw_storage(&self) -> &C::Storage {
+    pub fn raw_storage(&self) -> &S {
         &self.storage
     }
 
-    pub fn raw_storage_mut(&mut self) -> &mut C::Storage {
+    pub fn raw_storage_mut(&mut self) -> &mut S {
         &mut self.storage
     }
 
@@ -43,7 +40,7 @@ impl<C: Component> MaskedStorage<C> {
         self.mask.contains(index)
     }
 
-    pub fn get(&self, index: Index) -> Option<&C> {
+    pub fn get(&self, index: Index) -> Option<&S::Item> {
         if self.mask.contains(index) {
             Some(unsafe { self.storage.get(index) })
         } else {
@@ -51,7 +48,7 @@ impl<C: Component> MaskedStorage<C> {
         }
     }
 
-    pub fn get_mut(&mut self, index: Index) -> Option<&mut C> {
+    pub fn get_mut(&mut self, index: Index) -> Option<&mut S::Item> {
         if self.mask.contains(index) {
             Some(unsafe { self.storage.get_mut(index) })
         } else {
@@ -59,13 +56,13 @@ impl<C: Component> MaskedStorage<C> {
         }
     }
 
-    pub fn insert(&mut self, index: Index, mut c: C) -> Option<C> {
+    pub fn insert(&mut self, index: Index, mut v: S::Item) -> Option<S::Item> {
         if self.mask.contains(index) {
-            mem::swap(&mut c, unsafe { self.storage.get_mut(index) });
-            Some(c)
+            mem::swap(&mut v, unsafe { self.storage.get_mut(index) });
+            Some(v)
         } else {
             self.mask.add(index);
-            unsafe { self.storage.insert(index, c) };
+            unsafe { self.storage.insert(index, v) };
             None
         }
     }
@@ -75,23 +72,23 @@ impl<C: Component> MaskedStorage<C> {
     /// This is useful when combined with `FlaggedStorage`, which keeps track of modified
     /// components.  By using this method, you can avoid flagging changes unnecessarily when the new
     /// value of the component is equal to the old one.
-    pub fn update(&mut self, index: Index, mut c: C) -> Option<C>
+    pub fn update(&mut self, index: Index, mut v: S::Item) -> Option<S::Item>
     where
-        C: PartialEq,
+        S::Item: PartialEq,
     {
         if self.mask.contains(index) {
             unsafe {
-                if &c != self.storage.get(index) {
-                    mem::swap(&mut c, self.storage.get_mut(index));
+                if &v != self.storage.get(index) {
+                    mem::swap(&mut v, self.storage.get_mut(index));
                 }
             }
-            Some(c)
+            Some(v)
         } else {
             None
         }
     }
 
-    pub fn remove(&mut self, index: Index) -> Option<C> {
+    pub fn remove(&mut self, index: Index) -> Option<S::Item> {
         if self.mask.remove(index) {
             Some(unsafe { self.storage.remove(index) })
         } else {
@@ -103,14 +100,14 @@ impl<C: Component> MaskedStorage<C> {
     ///
     /// A `GuardedJoin` wrapper does not automatically call `RawStorage::get_mut`, so it can be
     /// useful to avoid flagging modifications with a `FlaggedStorage`.
-    pub fn guard(&mut self) -> GuardedJoin<C> {
+    pub fn guard(&mut self) -> GuardedJoin<S> {
         GuardedJoin(self)
     }
 }
 
-impl<'a, C: Component> Join for &'a MaskedStorage<C> {
-    type Item = &'a C;
-    type Access = &'a C::Storage;
+impl<'a, S: RawStorage> Join for &'a MaskedStorage<S> {
+    type Item = &'a S::Item;
+    type Access = &'a S;
     type Mask = &'a BitSet;
 
     fn open(self) -> (Self::Mask, Self::Access) {
@@ -122,9 +119,9 @@ impl<'a, C: Component> Join for &'a MaskedStorage<C> {
     }
 }
 
-impl<'a, C: Component> Join for &'a mut MaskedStorage<C> {
-    type Item = &'a mut C;
-    type Access = &'a C::Storage;
+impl<'a, S: RawStorage> Join for &'a mut MaskedStorage<S> {
+    type Item = &'a mut S::Item;
+    type Access = &'a S;
     type Mask = &'a BitSet;
 
     fn open(self) -> (Self::Mask, Self::Access) {
@@ -136,19 +133,16 @@ impl<'a, C: Component> Join for &'a mut MaskedStorage<C> {
     }
 }
 
-impl<C: Component> Drop for MaskedStorage<C> {
+impl<S: RawStorage> Drop for MaskedStorage<S> {
     fn drop(&mut self) {
-        struct DropGuard<'a, 'b, C: Component>(
-            Option<&'b mut BitIter<&'a BitSet>>,
-            &'b mut C::Storage,
-        );
+        struct DropGuard<'a, 'b, S: RawStorage>(Option<&'b mut BitIter<&'a BitSet>>, &'b mut S);
 
-        impl<'a, 'b, C: Component> Drop for DropGuard<'a, 'b, C> {
+        impl<'a, 'b, S: RawStorage> Drop for DropGuard<'a, 'b, S> {
             fn drop(&mut self) {
                 if let Some(iter) = self.0.take() {
-                    let mut guard: DropGuard<C> = DropGuard(Some(&mut *iter), &mut *self.1);
+                    let mut guard: DropGuard<S> = DropGuard(Some(&mut *iter), &mut *self.1);
                     while let Some(index) = guard.0.as_mut().unwrap().next() {
-                        unsafe { C::Storage::remove(&mut guard.1, index) };
+                        unsafe { S::remove(&mut guard.1, index) };
                     }
                     guard.0 = None;
                 }
@@ -156,15 +150,15 @@ impl<C: Component> Drop for MaskedStorage<C> {
         }
 
         let mut iter = (&self.mask).iter();
-        DropGuard::<C>(Some(&mut iter), &mut self.storage);
+        DropGuard::<S>(Some(&mut iter), &mut self.storage);
     }
 }
 
-pub struct GuardedJoin<'a, C: Component>(&'a mut MaskedStorage<C>);
+pub struct GuardedJoin<'a, S: RawStorage>(&'a mut MaskedStorage<S>);
 
-impl<'a, C: Component> Join for GuardedJoin<'a, C> {
-    type Item = ElementGuard<'a, C>;
-    type Access = &'a C::Storage;
+impl<'a, S: RawStorage> Join for GuardedJoin<'a, S> {
+    type Item = ElementGuard<'a, S>;
+    type Access = &'a S;
     type Mask = &'a BitSet;
 
     fn open(self) -> (Self::Mask, Self::Access) {
@@ -179,29 +173,29 @@ impl<'a, C: Component> Join for GuardedJoin<'a, C> {
     }
 }
 
-pub struct ElementGuard<'a, C: Component> {
-    storage: &'a C::Storage,
+pub struct ElementGuard<'a, S> {
+    storage: &'a S,
     index: Index,
 }
 
-impl<'a, C: Component> ElementGuard<'a, C> {
-    pub fn get(&self) -> &'a C {
+impl<'a, S: RawStorage> ElementGuard<'a, S> {
+    pub fn get(&self) -> &'a S::Item {
         unsafe { self.storage.get(self.index) }
     }
 
-    pub fn get_mut(&mut self) -> &'a mut C {
+    pub fn get_mut(&mut self) -> &'a mut S::Item {
         unsafe { self.storage.get_mut(self.index) }
     }
 
-    pub fn update(&mut self, mut c: C) -> C
+    pub fn update(&mut self, mut v: S::Item) -> S::Item
     where
-        C: PartialEq,
+        S::Item: PartialEq,
     {
         unsafe {
-            if &c != self.storage.get(self.index) {
-                mem::swap(&mut c, self.storage.get_mut(self.index));
+            if &v != self.storage.get(self.index) {
+                mem::swap(&mut v, self.storage.get_mut(self.index));
             }
-            c
+            v
         }
     }
 }

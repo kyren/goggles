@@ -62,10 +62,10 @@ whatever level of abstraction is appropriate:
    is similar to the `Join` trait in `specs`, but redesigned for a bit more
    safety.
    
-5) The `component` module contains the `Component` and `RawStorage` traits, as
-   well as the 3 most useful storage types: `VecStorage`, `DenseVecStorage`, and
-   `HashMapStorage`.  It is extremely similar to the equivalent functionality in
-   `specs`.
+5) The `storage` module contains the `RawStorage` trait as well as 3 useful
+   implementations: `VecStorage`, `DenseVecStorage`, and `HashMapStorage`.  This
+   is an abstract, unsafe trait for storing values associated with indexes.  It
+   is extremely similar to the equivalent functionality in `specs`.
 
 6) The `tracked` module contains a `RawStorage` wrapper that keeps track of
    component changes.  Unlike `specs`, this is pretty minimal and only

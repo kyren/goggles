@@ -1,11 +1,8 @@
 use hibitset::AtomicBitSet;
 
-use crate::{
-    component::{Component, RawStorage},
-    join::Index,
-};
+use crate::{join::Index, storage::RawStorage};
 
-pub trait TrackedStorage<C>: RawStorage<C> {
+pub trait TrackedStorage: RawStorage {
     fn set_track_modified(&mut self, flag: bool);
     fn tracking_modified(&self) -> bool;
 
@@ -27,30 +24,31 @@ pub struct Flagged<S> {
     modified: AtomicBitSet,
 }
 
-impl<C, S> RawStorage<C> for Flagged<S>
+impl<S> RawStorage for Flagged<S>
 where
-    C: Component,
-    S: RawStorage<C>,
+    S: RawStorage,
 {
-    unsafe fn get(&self, index: Index) -> &C {
+    type Item = S::Item;
+
+    unsafe fn get(&self, index: Index) -> &Self::Item {
         self.storage.get(index)
     }
 
-    unsafe fn get_mut(&self, index: Index) -> &mut C {
+    unsafe fn get_mut(&self, index: Index) -> &mut Self::Item {
         if self.tracking {
             self.modified.add_atomic(index);
         }
         self.storage.get_mut(index)
     }
 
-    unsafe fn insert(&mut self, index: Index, value: C) {
+    unsafe fn insert(&mut self, index: Index, value: Self::Item) {
         if self.tracking {
             self.modified.add(index);
         }
         self.storage.insert(index, value);
     }
 
-    unsafe fn remove(&mut self, index: Index) -> C {
+    unsafe fn remove(&mut self, index: Index) -> Self::Item {
         if self.tracking {
             self.modified.add(index);
         }
@@ -58,10 +56,9 @@ where
     }
 }
 
-impl<C, S> TrackedStorage<C> for Flagged<S>
+impl<S> TrackedStorage for Flagged<S>
 where
-    C: Component,
-    S: RawStorage<C>,
+    S: RawStorage,
 {
     fn set_track_modified(&mut self, flag: bool) {
         self.tracking = flag;
