@@ -3,10 +3,17 @@ use hibitset::AtomicBitSet;
 use crate::{join::Index, storage::RawStorage};
 
 pub trait TrackedStorage: RawStorage {
+    /// If this is true, then calls to `get_mut`, `insert`, and `remove` will automatically set
+    /// modified bits.
     fn set_track_modified(&mut self, flag: bool);
     fn tracking_modified(&self) -> bool;
 
+    /// Manually mark an index as modified.
+    fn mark_modified(&self, index: Index);
+
     fn modified(&self) -> &AtomicBitSet;
+
+    /// Clear the modified bitset.
     fn clear_modified(&mut self);
 }
 
@@ -66,6 +73,10 @@ where
 
     fn tracking_modified(&self) -> bool {
         self.tracking
+    }
+
+    fn mark_modified(&self, index: Index) {
+        self.modified.add_atomic(index);
     }
 
     fn modified(&self) -> &AtomicBitSet {

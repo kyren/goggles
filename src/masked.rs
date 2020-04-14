@@ -5,6 +5,7 @@ use hibitset::{BitIter, BitSet, BitSetLike};
 use crate::{
     join::{Index, Join},
     storage::RawStorage,
+    tracked::TrackedStorage,
 };
 
 /// Wraps a `RawStorage` for some component with a `BitSet` mask to provide a safe, `Join`-able
@@ -197,5 +198,11 @@ impl<'a, S: RawStorage> ElementGuard<'a, S> {
             }
             v
         }
+    }
+}
+
+impl<'a, S: TrackedStorage> ElementGuard<'a, S> {
+    pub fn mark_modified(&self) {
+        self.storage.mark_modified(self.index);
     }
 }

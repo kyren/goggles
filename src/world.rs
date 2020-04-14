@@ -476,6 +476,15 @@ where
     pub fn modified_indexes(&self) -> &AtomicBitSet {
         self.storage.raw_storage().modified()
     }
+
+    pub fn mark_modified(&self, entity: Entity) -> Result<(), WrongGeneration> {
+        if self.entities.is_alive(entity) {
+            self.storage.raw_storage().mark_modified(entity.index());
+            Ok(())
+        } else {
+            Err(WrongGeneration)
+        }
+    }
 }
 
 impl<'a, C, R> ComponentAccess<'a, C, R>
