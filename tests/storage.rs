@@ -1,23 +1,14 @@
 use rayon::iter::ParallelIterator;
 
-use goggles::{Component, DenseVecStorage, IntoJoinExt, MaskedStorage, VecStorage};
+use goggles::{DenseVecStorage, IntoJoinExt, MaskedStorage, VecStorage};
 
 pub struct CompA(i32);
-
-impl Component for CompA {
-    type Storage = VecStorage<Self>;
-}
-
 pub struct CompB(i32);
-
-impl Component for CompB {
-    type Storage = DenseVecStorage<Self>;
-}
 
 #[test]
 fn test_masked_storage_join() {
-    let mut a_storage = MaskedStorage::<CompA>::default();
-    let mut b_storage = MaskedStorage::<CompB>::default();
+    let mut a_storage = MaskedStorage::<VecStorage<CompA>>::default();
+    let mut b_storage = MaskedStorage::<DenseVecStorage<CompB>>::default();
 
     a_storage.insert(2, CompA(4));
     a_storage.insert(3, CompA(9));
@@ -38,8 +29,8 @@ fn test_masked_storage_join() {
 
 #[test]
 fn test_masked_storage_par_join() {
-    let mut a_storage = MaskedStorage::<CompA>::default();
-    let mut b_storage = MaskedStorage::<CompB>::default();
+    let mut a_storage = MaskedStorage::<VecStorage<CompA>>::default();
+    let mut b_storage = MaskedStorage::<DenseVecStorage<CompB>>::default();
 
     for i in 0..1000 {
         a_storage.insert(i, CompA(i as i32));
