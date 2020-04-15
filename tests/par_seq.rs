@@ -31,7 +31,7 @@ macro_rules! test_system {
             struct $s;
 
             impl System for $s {
-                type World = ();
+                type Source = ();
                 type Resources = TestResources;
                 type Pool = SeqPool;
                 type Args = ();
@@ -41,7 +41,7 @@ macro_rules! test_system {
                     Ok(TestResources([$($resources),*].iter().copied().collect()))
                 }
 
-                fn run(&mut self, _: &Self::Pool, _: &Self::World, _: &Self::Args) -> Result<(), Self::Error> {
+                fn run(&mut self, _: &Self::Pool, _: &Self::Source, _: &Self::Args) -> Result<(), Self::Error> {
                     Ok(())
                 }
             }

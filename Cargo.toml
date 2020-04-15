@@ -4,9 +4,9 @@ version = "0.1.1-alpha.0"
 authors = ["kyren <kerriganw@gmail.com>"]
 edition = "2018"
 description = "Building blocks for a hibitset based ECS library"
+readme = "README.md"
 repository = "https://github.com/kyren/goggles"
 documentation = "https://docs.rs/goggles"
-readme = "README.md"
 keywords = ["gamedev", "ecs"]
 license = "MIT OR Apache-2.0"
 

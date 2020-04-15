@@ -38,7 +38,7 @@ pub struct ResourceConflict {
 
 /// A system that may be run in parallel or in sequence with other such systems in a group.
 ///
-/// This trait is designed so that systems may read or write to resources inside the `world`
+/// This trait is designed so that systems may read or write to resources inside the `source`
 /// parameter.  Systems report the resources they intend to use abstractly through the `Resources`
 /// type, and this provides the ability to check parallel systems for resource conflicts.
 //
@@ -61,7 +61,7 @@ pub struct ResourceConflict {
 // }
 // ```
 //
-// This would allow dropping the `World` associated type and would be much more general, allowing
+// This would allow dropping the `Source` associated type and would be much more general, allowing
 // you to pass arbitrary non-'static arguments as parameters to `System::run` if your systems
 // implement `for<'a> System<'a>`.
 
@@ -71,7 +71,7 @@ pub struct ResourceConflict {
 //
 // When this issue is fixed this trait should be changed.
 pub trait System {
-    type World: ?Sized;
+    type Source: ?Sized;
     type Resources: Resources;
     type Pool: Pool;
     type Args: ?Sized;
@@ -86,7 +86,7 @@ pub trait System {
     fn run(
         &mut self,
         pool: &Self::Pool,
-        world: &Self::World,
+        source: &Self::Source,
         args: &Self::Args,
     ) -> Result<(), Self::Error>;
 }
@@ -95,7 +95,7 @@ impl<S> System for Box<S>
 where
     S: ?Sized + System,
 {
-    type World = S::World;
+    type Source = S::Source;
     type Resources = S::Resources;
     type Pool = S::Pool;
     type Args = S::Args;
@@ -108,10 +108,10 @@ where
     fn run(
         &mut self,
         pool: &Self::Pool,
-        world: &Self::World,
+        source: &Self::Source,
         args: &Self::Args,
     ) -> Result<(), Self::Error> {
-        (**self).run(pool, world, args)
+        (**self).run(pool, source, args)
     }
 }
 
@@ -133,17 +133,17 @@ impl<H, T> Par<H, T> {
     }
 }
 
-impl<H, T, W, R, P, A, E> System for Par<H, T>
+impl<H, T, S, R, P, A, E> System for Par<H, T>
 where
-    H: System<World = W, Resources = R, Pool = P, Args = A, Error = E> + Send,
-    T: System<World = W, Resources = R, Pool = P, Args = A, Error = E> + Send,
-    W: ?Sized + Sync,
+    H: System<Source = S, Resources = R, Pool = P, Args = A, Error = E> + Send,
+    T: System<Source = S, Resources = R, Pool = P, Args = A, Error = E> + Send,
+    S: ?Sized + Sync,
     R: Resources + Send,
     P: Pool + Sync,
     A: ?Sized + Sync,
     E: Error + Send,
 {
-    type World = W;
+    type Source = S;
     type Resources = R;
     type Pool = P;
     type Args = A;
@@ -166,13 +166,13 @@ where
     fn run(
         &mut self,
         pool: &Self::Pool,
-        world: &Self::World,
+        source: &Self::Source,
         args: &Self::Args,
     ) -> Result<(), Self::Error> {
         let Self { head, tail, .. } = self;
         match pool.join(
-            move || head.run(pool, world, args),
-            move || tail.run(pool, world, args),
+            move || head.run(pool, source, args),
+            move || tail.run(pool, source, args),
         ) {
             (Ok(()), Ok(())) => Ok(()),
             (Err(a), Ok(())) => Err(a),
@@ -210,17 +210,17 @@ impl<H, T> Seq<H, T> {
     }
 }
 
-impl<H, T, W, R, P, A, E> System for Seq<H, T>
+impl<H, T, S, R, P, A, E> System for Seq<H, T>
 where
-    H: System<World = W, Resources = R, Pool = P, Args = A, Error = E>,
-    T: System<World = W, Resources = R, Pool = P, Args = A, Error = E>,
-    W: ?Sized,
+    H: System<Source = S, Resources = R, Pool = P, Args = A, Error = E>,
+    T: System<Source = S, Resources = R, Pool = P, Args = A, Error = E>,
+    S: ?Sized,
     R: Resources,
     P: Pool,
     A: ?Sized,
     E: Error,
 {
-    type World = W;
+    type Source = S;
     type Resources = R;
     type Pool = P;
     type Args = A;
@@ -235,11 +235,11 @@ where
     fn run(
         &mut self,
         pool: &Self::Pool,
-        world: &Self::World,
+        source: &Self::Source,
         args: &Self::Args,
     ) -> Result<(), Self::Error> {
-        self.head.run(pool, world, args)?;
-        self.tail.run(pool, world, args)
+        self.head.run(pool, source, args)?;
+        self.tail.run(pool, source, args)
     }
 }
 
