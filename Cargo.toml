@@ -14,6 +14,7 @@ license = "MIT OR Apache-2.0"
 circle-ci = { repository = "kyren/goggles", branch = "master" }
 
 [dependencies]
+anymap = "0.12"
 atomic_refcell = "0.1"
 hibitset = "0.6"
 rayon = "1.3"

@@ -19,6 +19,7 @@ pub use par_seq::{
     Error as SystemError, Par, Pool, RayonPool, ResourceConflict, Resources, RwResources, Seq,
     SeqPool, System,
 };
+pub use resource_set::{Read, ResourceSet, Write};
 pub use storage::{DenseVecStorage, HashMapStorage, RawStorage, VecStorage};
 pub use system_data::SystemData;
 pub use tracked::{Flagged, TrackedStorage};

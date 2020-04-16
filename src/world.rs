@@ -113,7 +113,7 @@ impl World {
     /// Panics if the resource has not been inserted.
     pub fn get_resource_mut<R>(&mut self) -> &mut R
     where
-        R: 'static,
+        R: Send + 'static,
     {
         self.resources.get_mut()
     }
@@ -193,6 +193,7 @@ impl World {
     pub fn get_component_mut<C>(&mut self) -> ComponentAccess<C, &mut ComponentStorage<C>>
     where
         C: Component + 'static,
+        C::Storage: Send,
     {
         ComponentAccess {
             storage: self.components.get_mut(),

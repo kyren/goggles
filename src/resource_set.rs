@@ -1,10 +1,10 @@
 use std::{
-    any::{type_name, Any, TypeId},
-    collections::HashMap,
+    any::{type_name, TypeId},
     iter,
     ops::{Deref, DerefMut},
 };
 
+use anymap::{any::Any, Map};
 use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 
 use crate::{
@@ -15,9 +15,16 @@ use crate::{
 
 /// Store a set of arbitrary types inside `AtomicRefCell`s, and then access them for either reading
 /// or writing.
-#[derive(Default)]
 pub struct ResourceSet {
-    resources: HashMap<ResourceId, AtomicRefCell<Box<dyn Any + Send + Sync>>>,
+    resources: Map<dyn Any + Send + Sync>,
+}
+
+impl Default for ResourceSet {
+    fn default() -> Self {
+        ResourceSet {
+            resources: Map::new(),
+        }
+    }
 }
 
 impl ResourceSet {
@@ -30,35 +37,24 @@ impl ResourceSet {
         T: Send + 'static,
     {
         self.resources
-            .insert(
-                ResourceId::of::<T>(),
-                AtomicRefCell::new(Box::new(Resource::new(r))),
-            )
-            .map(|r| {
-                Box::<dyn Any + Send>::from(r.into_inner())
-                    .downcast::<Resource<T>>()
-                    .unwrap()
-                    .into_inner()
-            })
+            .insert::<Resource<T>>(AtomicRefCell::new(MakeSync::new(r)))
+            .map(|r| r.into_inner().into_inner())
     }
 
     pub fn remove<T>(&mut self) -> Option<T>
     where
         T: Send + 'static,
     {
-        self.resources.remove(&ResourceId::of::<T>()).map(|r| {
-            Box::<dyn Any + Send>::from(r.into_inner())
-                .downcast::<Resource<T>>()
-                .unwrap()
-                .into_inner()
-        })
+        self.resources
+            .remove::<Resource<T>>()
+            .map(|r| r.into_inner().into_inner())
     }
 
     pub fn contains<T>(&self) -> bool
     where
         T: Send + 'static,
     {
-        self.resources.contains_key(&ResourceId::of::<T>())
+        self.resources.contains::<Resource<T>>()
     }
 
     /// Borrow the given resource immutably.
@@ -69,10 +65,8 @@ impl ResourceSet {
     where
         T: Send + Sync + 'static,
     {
-        if let Some(r) = self.resources.get(&ResourceId::of::<T>()) {
-            AtomicRef::map(r.borrow(), |r| {
-                r.downcast_ref::<Resource<T>>().unwrap().get()
-            })
+        if let Some(r) = self.resources.get::<Resource<T>>() {
+            AtomicRef::map(r.borrow(), |r| r.get())
         } else {
             panic!("no such resource {:?}", type_name::<T>());
         }
@@ -86,10 +80,8 @@ impl ResourceSet {
     where
         T: Send + 'static,
     {
-        if let Some(r) = self.resources.get(&ResourceId::of::<T>()) {
-            AtomicRefMut::map(r.borrow_mut(), |r| {
-                r.downcast_mut::<Resource<T>>().unwrap().get_mut()
-            })
+        if let Some(r) = self.resources.get::<Resource<T>>() {
+            AtomicRefMut::map(r.borrow_mut(), |r| r.get_mut())
         } else {
             panic!("no such resource {:?}", type_name::<T>());
         }
@@ -99,10 +91,10 @@ impl ResourceSet {
     /// Panics if the resource has not been inserted.
     pub fn get_mut<T>(&mut self) -> &mut T
     where
-        T: 'static,
+        T: Send + 'static,
     {
-        if let Some(r) = self.resources.get_mut(&ResourceId::of::<T>()) {
-            r.get_mut().downcast_mut::<Resource<T>>().unwrap().get_mut()
+        if let Some(r) = self.resources.get_mut::<Resource<T>>() {
+            r.get_mut().get_mut()
         } else {
             panic!("no such resource {:?}", type_name::<T>());
         }
@@ -198,4 +190,4 @@ impl<'a, T> DerefMut for Write<'a, T> {
     }
 }
 
-type Resource<T> = MakeSync<T>;
+type Resource<T> = AtomicRefCell<MakeSync<T>>;
