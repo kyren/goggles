@@ -14,6 +14,7 @@ pub mod tracked;
 pub mod world;
 
 pub use entity::{Entity, WrongGeneration};
+pub use fetch_resources::FetchResources;
 pub use join::{Index, IntoJoin, IntoJoinExt, Join, JoinIter, JoinIterUnconstrained, JoinParIter};
 pub use masked::MaskedStorage;
 pub use par_seq::{Error as SystemError, Par, Pool, RayonPool, Seq, SeqPool, System};
