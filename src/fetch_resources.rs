@@ -1,13 +1,13 @@
 use std::any::type_name;
 
-use crate::par_seq::{ResourceConflict, Resources};
+use crate::resources::{ResourceConflict, Resources};
 
-/// A trait for statically defining mutable and immutable resources from an abstract source for use
-/// with the `par_seq` module.
+/// A trait for statically defining mutable and immutable resources fetched from a data source which
+/// may or may not conflict.
 ///
-/// Tuples of types that implement `SystemData` automatically themselves implement `SystemData` and
-/// correctly find the union of the resources they use.
-pub trait SystemData<'a> {
+/// Tuples of types that implement `FetchResources` automatically themselves implement
+/// `FetchResources` and correctly find the union of the resources they use.
+pub trait FetchResources<'a> {
     type Source;
     type Resources: Resources;
 
@@ -17,10 +17,10 @@ pub trait SystemData<'a> {
 
 macro_rules! impl_data {
     ($($ty:ident),*) => {
-        impl<'a, ST, RT, $($ty),*> SystemData<'a> for ($($ty,)*)
+        impl<'a, ST, RT, $($ty),*> FetchResources<'a> for ($($ty,)*)
         where
             RT: Resources,
-            $($ty: SystemData<'a, Source = ST, Resources = RT>),*
+            $($ty: FetchResources<'a, Source = ST, Resources = RT>),*
         {
             type Source = ST;
             type Resources = RT;
@@ -28,7 +28,7 @@ macro_rules! impl_data {
             fn check_resources() -> Result<Self::Resources, ResourceConflict> {
                 let mut resources = Self::Resources::default();
                 $({
-                    let r = <$ty as SystemData>::check_resources()?;
+                    let r = <$ty as FetchResources>::check_resources()?;
                     if resources.conflicts_with(&r) {
                         return Err(ResourceConflict { type_name: type_name::<Self>() });
                     }
@@ -38,7 +38,7 @@ macro_rules! impl_data {
             }
 
             fn fetch(source: &'a Self::Source) -> Self {
-                ($(<$ty as SystemData<'a>>::fetch(source),)*)
+                ($(<$ty as FetchResources<'a>>::fetch(source),)*)
             }
         }
     };

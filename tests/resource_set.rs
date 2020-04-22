@@ -1,10 +1,10 @@
 use goggles::{
+    fetch_resources::FetchResources,
     resource_set::{Read, ResourceSet, Write},
-    SystemData,
 };
 
 #[test]
-fn test_system_data() {
+fn test_fetch_resources() {
     struct A;
     struct B;
     struct C;

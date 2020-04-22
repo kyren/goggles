@@ -10,12 +10,12 @@ use hibitset::AtomicBitSet;
 
 use crate::{
     entity::{Allocator, Entity, LiveBitSet, WrongGeneration},
+    fetch_resources::FetchResources,
     join::{Index, IntoJoin},
     masked::{GuardedJoin, MaskedStorage},
-    par_seq::{ResourceConflict, RwResources},
     resource_set::ResourceSet,
+    resources::{ResourceConflict, RwResources},
     storage::RawStorage,
-    system_data::SystemData,
     tracked::TrackedStorage,
 };
 
@@ -202,11 +202,11 @@ impl World {
         }
     }
 
-    pub fn fetch<'a, S>(&'a self) -> S
+    pub fn fetch<'a, F>(&'a self) -> F
     where
-        S: SystemData<'a, Source = World, Resources = RwResources<WorldResourceId>>,
+        F: FetchResources<'a, Source = World, Resources = RwResources<WorldResourceId>>,
     {
-        S::fetch(self)
+        F::fetch(self)
     }
 
     /// Merge any pending atomic entity operations.
@@ -290,7 +290,7 @@ impl<'a> IntoJoin for &'a Entities<'a> {
     }
 }
 
-impl<'a> SystemData<'a> for Entities<'a> {
+impl<'a> FetchResources<'a> for Entities<'a> {
     type Source = World;
     type Resources = RwResources<WorldResourceId>;
 
@@ -331,7 +331,7 @@ where
 /// Panics if the resource does not exist or has already been borrowed for writing.
 pub type ReadResource<'a, R> = ResourceAccess<AtomicRef<'a, R>>;
 
-impl<'a, R> SystemData<'a> for ReadResource<'a, R>
+impl<'a, R> FetchResources<'a> for ReadResource<'a, R>
 where
     R: Send + Sync + 'static,
 {
@@ -353,7 +353,7 @@ where
 /// Panics if the resource does not exist or has already been borrowed for writing.
 pub type WriteResource<'a, R> = ResourceAccess<AtomicRefMut<'a, R>>;
 
-impl<'a, R> SystemData<'a> for WriteResource<'a, R>
+impl<'a, R> FetchResources<'a> for WriteResource<'a, R>
 where
     R: Send + 'static,
 {
@@ -535,7 +535,7 @@ where
 /// Panics if the component does not exist or has already been borrowed for writing.
 pub type ReadComponent<'a, C> = ComponentAccess<'a, C, AtomicRef<'a, ComponentStorage<C>>>;
 
-impl<'a, C> SystemData<'a> for ReadComponent<'a, C>
+impl<'a, C> FetchResources<'a> for ReadComponent<'a, C>
 where
     C: Component + Send + Sync + 'static,
     C::Storage: Send + Sync,
@@ -560,7 +560,7 @@ where
 /// Panics if the component does not exist or has already been borrowed for writing.
 pub type WriteComponent<'a, C> = ComponentAccess<'a, C, AtomicRefMut<'a, ComponentStorage<C>>>;
 
-impl<'a, C> SystemData<'a> for WriteComponent<'a, C>
+impl<'a, C> FetchResources<'a> for WriteComponent<'a, C>
 where
     C: Component + Send + 'static,
     C::Storage: Send,

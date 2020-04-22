@@ -8,9 +8,9 @@ use anymap::{any::Any, Map};
 use atomic_refcell::{AtomicRef, AtomicRefCell, AtomicRefMut};
 
 use crate::{
+    fetch_resources::FetchResources,
     make_sync::MakeSync,
-    par_seq::{ResourceConflict, RwResources},
-    system_data::SystemData,
+    resources::{ResourceConflict, RwResources},
 };
 
 /// Store a set of arbitrary types inside `AtomicRefCell`s, and then access them for either reading
@@ -100,12 +100,12 @@ impl ResourceSet {
         }
     }
 
-    /// Fetch the given `SystemData`.
-    pub fn fetch<'a, S>(&'a self) -> S
+    /// Fetch the given `FetchResources`.
+    pub fn fetch<'a, F>(&'a self) -> F
     where
-        S: SystemData<'a, Source = ResourceSet, Resources = RwResources<ResourceId>>,
+        F: FetchResources<'a, Source = ResourceSet, Resources = RwResources<ResourceId>>,
     {
-        S::fetch(self)
+        F::fetch(self)
     }
 }
 
@@ -124,7 +124,7 @@ impl ResourceId {
 /// Panics if the resource does not exist or has already been borrowed for writing.
 pub struct Read<'a, T>(AtomicRef<'a, T>);
 
-impl<'a, T> SystemData<'a> for Read<'a, T>
+impl<'a, T> FetchResources<'a> for Read<'a, T>
 where
     T: Send + Sync + 'static,
 {
@@ -157,7 +157,7 @@ impl<'a, T> Deref for Read<'a, T> {
 /// Panics if the resource does not exist or has already been borrowed for writing.
 pub struct Write<'a, T>(AtomicRefMut<'a, T>);
 
-impl<'a, T> SystemData<'a> for Write<'a, T>
+impl<'a, T> FetchResources<'a> for Write<'a, T>
 where
     T: Send + 'static,
 {
