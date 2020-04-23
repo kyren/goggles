@@ -31,6 +31,12 @@ jobs:
             rustfmt --version
             cargo fmt --all -- --check --color=auto
       - run:
+          name: Build all targets no-features
+          command: cargo build --all --all-targets --no-default-features
+      - run:
+          name: Run all tests no-features
+          command: cargo test --all --no-default-features
+      - run:
           name: Build all targets
           command: cargo build --all --all-targets
       - run:

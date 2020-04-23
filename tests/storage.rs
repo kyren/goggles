@@ -1,5 +1,3 @@
-use rayon::iter::ParallelIterator;
-
 use goggles::{DenseVecStorage, IntoJoinExt, MaskedStorage, VecStorage};
 
 pub struct CompA(i32);
@@ -27,8 +25,12 @@ fn test_masked_storage_join() {
     );
 }
 
+#[cfg(feature = "rayon")]
 #[test]
 fn test_masked_storage_par_join() {
+    use goggles::ParJoinExt;
+    use rayon::iter::ParallelIterator;
+
     let mut a_storage = MaskedStorage::<VecStorage<CompA>>::default();
     let mut b_storage = MaskedStorage::<DenseVecStorage<CompB>>::default();
 

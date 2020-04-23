@@ -1,5 +1,4 @@
 pub use hibitset;
-pub use rayon;
 
 pub mod entity;
 pub mod fetch_resources;
@@ -13,16 +12,29 @@ pub mod storage;
 pub mod tracked;
 pub mod world;
 
-pub use entity::{Entity, WrongGeneration};
-pub use fetch_resources::FetchResources;
-pub use join::{Index, IntoJoin, IntoJoinExt, Join, JoinIter, JoinIterUnconstrained, JoinParIter};
-pub use masked::MaskedStorage;
-pub use par_seq::{Error as SystemError, Par, Pool, RayonPool, Seq, SeqPool, System};
-pub use resource_set::{Read, ResourceSet, Write};
-pub use resources::{ResourceConflict, Resources, RwResources};
-pub use storage::{DenseVecStorage, HashMapStorage, RawStorage, VecStorage};
-pub use tracked::{Flagged, TrackedStorage};
-pub use world::{
-    Component, ComponentId, Entities, ReadComponent, ReadResource, ResourceId, World,
-    WorldResourceId, WorldResources, WriteComponent, WriteResource,
+pub use {
+    self::entity::{Entity, WrongGeneration},
+    fetch_resources::FetchResources,
+    join::{Index, IntoJoin, IntoJoinExt, Join, JoinIter, JoinIterUnconstrained, JoinParIter},
+    masked::MaskedStorage,
+    par_seq::{Error as SystemError, Par, Pool, Seq, SeqPool, System},
+    resource_set::{Read, ResourceSet, Write},
+    resources::{ResourceConflict, Resources, RwResources},
+    storage::{DenseVecStorage, HashMapStorage, RawStorage, VecStorage},
+    tracked::{Flagged, TrackedStorage},
+    world::{
+        Component, ComponentId, Entities, ReadComponent, ReadResource, ResourceId, World,
+        WorldResourceId, WorldResources, WriteComponent, WriteResource,
+    },
 };
+
+#[cfg(feature = "rayon")]
+pub use rayon;
+
+#[cfg(feature = "rayon")]
+pub mod par_join;
+#[cfg(feature = "rayon")]
+pub mod rayon_pool;
+
+#[cfg(feature = "rayon")]
+pub use self::{par_join::ParJoinExt, rayon_pool::RayonPool};
