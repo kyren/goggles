@@ -3,6 +3,8 @@ pub use hibitset;
 pub mod entity;
 pub mod fetch_resources;
 pub mod join;
+pub mod local_resource_set;
+pub mod local_world;
 pub mod make_sync;
 pub mod masked;
 pub mod par_seq;
@@ -11,21 +13,26 @@ pub mod resources;
 pub mod storage;
 pub mod tracked;
 pub mod world;
+pub mod world_common;
 
 pub use {
     self::entity::{Entity, WrongGeneration},
     fetch_resources::FetchResources,
     join::{Index, IntoJoin, IntoJoinExt, Join, JoinIter, JoinIterUnconstrained, JoinParIter},
+    local_resource_set::{Read as LocalRead, ResourceSet as LocalResourceSet, Write as LocalWrite},
+    local_world::{
+        Entities as LocalEntities, ReadComponent as ReadLocalComponent,
+        ReadResource as ReadLocalResource, World as LocalWorld,
+        WriteComponent as WriteLocalComponent, WriteResource as WriteLocalResource,
+    },
     masked::MaskedStorage,
     par_seq::{Error as SystemError, Par, Pool, Seq, SeqPool, System},
     resource_set::{Read, ResourceSet, Write},
     resources::{ResourceConflict, Resources, RwResources},
     storage::{DenseVecStorage, HashMapStorage, RawStorage, VecStorage},
     tracked::{Flagged, TrackedStorage},
-    world::{
-        Component, ComponentId, Entities, ReadComponent, ReadResource, ResourceId, World,
-        WorldResourceId, WorldResources, WriteComponent, WriteResource,
-    },
+    world::{Entities, ReadComponent, ReadResource, World, WriteComponent, WriteResource},
+    world_common::{Component, ComponentId, ResourceId, WorldResourceId, WorldResources},
 };
 
 #[cfg(feature = "rayon")]

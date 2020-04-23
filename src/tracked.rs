@@ -2,6 +2,8 @@ use hibitset::AtomicBitSet;
 
 use crate::{join::Index, storage::RawStorage};
 
+pub type TrackedBitSet = AtomicBitSet;
+
 pub trait TrackedStorage: RawStorage {
     /// If this is true, then calls to `get_mut`, `insert`, and `remove` will automatically set
     /// modified bits.

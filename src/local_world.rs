@@ -1,18 +1,17 @@
 use std::{
     any::TypeId,
+    cell::{Ref, RefMut},
     collections::HashMap,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
-use atomic_refcell::{AtomicRef, AtomicRefMut};
-
 use crate::{
     entity::{Allocator, Entity, LiveBitSet, WrongGeneration},
     fetch_resources::FetchResources,
     join::{Index, IntoJoin},
+    local_resource_set::ResourceSet,
     masked::GuardedJoin,
-    resource_set::ResourceSet,
     resources::{ResourceConflict, RwResources},
     tracked::{TrackedBitSet, TrackedStorage},
     world_common::{Component, ComponentId, ComponentStorage, ResourceId, WorldResourceId},
@@ -23,7 +22,7 @@ pub struct World {
     allocator: Allocator,
     resources: ResourceSet,
     components: ResourceSet,
-    remove_components: HashMap<TypeId, Box<dyn Fn(&ResourceSet, &[Entity]) + Send + Sync>>,
+    remove_components: HashMap<TypeId, Box<dyn Fn(&ResourceSet, &[Entity])>>,
     killed: Vec<Entity>,
 }
 
@@ -56,21 +55,21 @@ impl World {
 
     pub fn insert_resource<R>(&mut self, r: R) -> Option<R>
     where
-        R: Send + 'static,
+        R: 'static,
     {
         self.resources.insert(r)
     }
 
     pub fn remove_resource<R>(&mut self) -> Option<R>
     where
-        R: Send + 'static,
+        R: 'static,
     {
         self.resources.remove::<R>()
     }
 
     pub fn contains_resource<T>(&self) -> bool
     where
-        T: Send + 'static,
+        T: 'static,
     {
         self.resources.contains::<T>()
     }
@@ -81,7 +80,7 @@ impl World {
     /// Panics if the resource has not been inserted or is already borrowed mutably.
     pub fn read_resource<R>(&self) -> ReadResource<R>
     where
-        R: Send + Sync + 'static,
+        R: 'static,
     {
         ResourceAccess(self.resources.borrow())
     }
@@ -92,7 +91,7 @@ impl World {
     /// Panics if the resource has not been inserted or is already borrowed.
     pub fn write_resource<R>(&self) -> WriteResource<R>
     where
-        R: Send + 'static,
+        R: 'static,
     {
         ResourceAccess(self.resources.borrow_mut())
     }
@@ -101,7 +100,7 @@ impl World {
     /// Panics if the resource has not been inserted.
     pub fn get_resource_mut<R>(&mut self) -> &mut R
     where
-        R: Send + 'static,
+        R: 'static,
     {
         self.resources.get_mut()
     }
@@ -112,7 +111,7 @@ impl World {
     pub fn insert_component<C>(&mut self) -> Option<ComponentStorage<C>>
     where
         C: Component + 'static,
-        C::Storage: Default + Send,
+        C::Storage: Default,
     {
         self.remove_components.insert(
             TypeId::of::<C>(),
@@ -130,7 +129,7 @@ impl World {
     pub fn remove_component<C>(&mut self) -> Option<ComponentStorage<C>>
     where
         C: Component + 'static,
-        C::Storage: Default + Send,
+        C::Storage: Default,
     {
         self.remove_components.remove(&TypeId::of::<C>());
         self.components.remove::<ComponentStorage<C>>()
@@ -139,7 +138,6 @@ impl World {
     pub fn contains_component<C>(&self) -> bool
     where
         C: Component + 'static,
-        C::Storage: Send,
     {
         self.components.contains::<ComponentStorage<C>>()
     }
@@ -151,7 +149,6 @@ impl World {
     pub fn read_component<C>(&self) -> ReadComponent<C>
     where
         C: Component + 'static,
-        C::Storage: Send + Sync,
     {
         ComponentAccess {
             storage: self.components.borrow(),
@@ -167,7 +164,6 @@ impl World {
     pub fn write_component<C>(&self) -> WriteComponent<C>
     where
         C: Component + 'static,
-        C::Storage: Send,
     {
         ComponentAccess {
             storage: self.components.borrow_mut(),
@@ -181,7 +177,6 @@ impl World {
     pub fn get_component_mut<C>(&mut self) -> ComponentAccess<C, &mut ComponentStorage<C>>
     where
         C: Component + 'static,
-        C::Storage: Send,
     {
         ComponentAccess {
             storage: self.components.get_mut(),
@@ -197,7 +192,7 @@ impl World {
         F::fetch(self)
     }
 
-    /// Merge any pending atomic entity operations.
+    /// Merge any pending entity operations.
     ///
     /// Merges atomically allocated entities into the normal entity `BitSet` for performance, and
     /// finalizes any entities that were requested to be deleted.
@@ -290,11 +285,11 @@ where
 ///
 /// # Panics
 /// Panics if the resource does not exist or has already been borrowed for writing.
-pub type ReadResource<'a, R> = ResourceAccess<AtomicRef<'a, R>>;
+pub type ReadResource<'a, R> = ResourceAccess<Ref<'a, R>>;
 
 impl<'a, R> FetchResources<'a> for ReadResource<'a, R>
 where
-    R: Send + Sync + 'static,
+    R: 'static,
 {
     type Source = World;
     type Resources = RwResources<WorldResourceId>;
@@ -312,11 +307,11 @@ where
 ///
 /// # Panics
 /// Panics if the resource does not exist or has already been borrowed for writing.
-pub type WriteResource<'a, R> = ResourceAccess<AtomicRefMut<'a, R>>;
+pub type WriteResource<'a, R> = ResourceAccess<RefMut<'a, R>>;
 
 impl<'a, R> FetchResources<'a> for WriteResource<'a, R>
 where
-    R: Send + 'static,
+    R: 'static,
 {
     type Source = World;
     type Resources = RwResources<WorldResourceId>;
@@ -494,12 +489,11 @@ where
 ///
 /// # Panics
 /// Panics if the component does not exist or has already been borrowed for writing.
-pub type ReadComponent<'a, C> = ComponentAccess<'a, C, AtomicRef<'a, ComponentStorage<C>>>;
+pub type ReadComponent<'a, C> = ComponentAccess<'a, C, Ref<'a, ComponentStorage<C>>>;
 
 impl<'a, C> FetchResources<'a> for ReadComponent<'a, C>
 where
-    C: Component + Send + Sync + 'static,
-    C::Storage: Send + Sync,
+    C: Component + 'static,
 {
     type Source = World;
     type Resources = RwResources<WorldResourceId>;
@@ -519,12 +513,11 @@ where
 ///
 /// # Panics
 /// Panics if the component does not exist or has already been borrowed for writing.
-pub type WriteComponent<'a, C> = ComponentAccess<'a, C, AtomicRefMut<'a, ComponentStorage<C>>>;
+pub type WriteComponent<'a, C> = ComponentAccess<'a, C, RefMut<'a, ComponentStorage<C>>>;
 
 impl<'a, C> FetchResources<'a> for WriteComponent<'a, C>
 where
-    C: Component + Send + 'static,
-    C::Storage: Send,
+    C: Component + 'static,
 {
     type Source = World;
     type Resources = RwResources<WorldResourceId>;

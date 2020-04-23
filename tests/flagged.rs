@@ -83,7 +83,7 @@ fn test_world() {
         assert_eq!(component_b.modified_indexes().iter().count(), 0);
     }
 
-    world.merge_atomic();
+    world.merge();
 
     let (component_a, component_b): (ReadComponent<CA>, ReadComponent<CB>) = world.fetch();
 

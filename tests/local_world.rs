@@ -1,6 +1,6 @@
 use goggles::{
-    join::IntoJoinExt, Component, Entities, ReadComponent, ReadResource, VecStorage, World,
-    WriteComponent, WriteResource,
+    join::IntoJoinExt, Component, LocalEntities, LocalWorld, ReadLocalComponent, ReadLocalResource,
+    VecStorage, WriteLocalComponent, WriteLocalResource,
 };
 
 struct RA(i32);
@@ -20,7 +20,7 @@ impl Component for CB {
 
 #[test]
 fn test_world() {
-    let mut world = World::new();
+    let mut world = LocalWorld::new();
 
     world.insert_resource(RA(1));
     world.insert_resource(RB(2));
@@ -31,9 +31,9 @@ fn test_world() {
     let mut evec = Vec::new();
     {
         let (entities, mut component_a, mut component_b): (
-            Entities,
-            WriteComponent<CA>,
-            WriteComponent<CB>,
+            LocalEntities,
+            WriteLocalComponent<CA>,
+            WriteLocalComponent<CB>,
         ) = world.fetch();
 
         for _ in 0..100 {
@@ -46,11 +46,11 @@ fn test_world() {
 
     {
         let (entities, resource_a, resource_b, component_a, component_b): (
-            Entities,
-            ReadResource<RA>,
-            WriteResource<RB>,
-            ReadComponent<CA>,
-            WriteComponent<CB>,
+            LocalEntities,
+            ReadLocalResource<RA>,
+            WriteLocalResource<RB>,
+            ReadLocalComponent<CA>,
+            WriteLocalComponent<CB>,
         ) = world.fetch();
 
         assert_eq!(resource_a.0, 1);
