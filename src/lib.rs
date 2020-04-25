@@ -25,6 +25,7 @@ pub use {
         ReadResource as ReadLocalResource, World as LocalWorld,
         WriteComponent as WriteLocalComponent, WriteResource as WriteLocalResource,
     },
+    make_sync::MakeSync,
     masked::MaskedStorage,
     par_seq::{Error as SystemError, Par, Pool, Seq, SeqPool, System},
     resource_set::{Read, ResourceSet, Write},

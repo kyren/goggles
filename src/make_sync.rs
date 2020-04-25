@@ -1,5 +1,8 @@
 /// Turns any type that implements `Send` into one that also implements `Sync` by only allowing
 /// mutable access if the inner type is not `Sync`.
+///
+/// This is commonly useful with collections like `ResourceSet`, because it allows you to only
+/// require a `Send` bound for data you only intend to access mutably.
 pub struct MakeSync<T>(T);
 
 impl<T> MakeSync<T> {
