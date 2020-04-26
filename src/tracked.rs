@@ -2,7 +2,7 @@ use hibitset::AtomicBitSet;
 
 use crate::{join::Index, storage::RawStorage};
 
-pub type TrackedBitSet = AtomicBitSet;
+pub type ModifiedBitSet = AtomicBitSet;
 
 pub trait TrackedStorage: RawStorage {
     /// If this is true, then calls to `get_mut`, `insert`, and `remove` will automatically set
@@ -13,7 +13,7 @@ pub trait TrackedStorage: RawStorage {
     /// Manually mark an index as modified.
     fn mark_modified(&self, index: Index);
 
-    fn modified(&self) -> &AtomicBitSet;
+    fn modified_indexes(&self) -> &ModifiedBitSet;
 
     /// Clear the modified bitset.
     fn clear_modified(&mut self);
@@ -30,7 +30,7 @@ pub trait TrackedStorage: RawStorage {
 pub struct Flagged<S> {
     tracking: bool,
     storage: S,
-    modified: AtomicBitSet,
+    modified: ModifiedBitSet,
 }
 
 impl<S> RawStorage for Flagged<S>
@@ -81,7 +81,7 @@ where
         self.modified.add_atomic(index);
     }
 
-    fn modified(&self) -> &AtomicBitSet {
+    fn modified_indexes(&self) -> &ModifiedBitSet {
         &self.modified
     }
 

@@ -11,10 +11,10 @@ use crate::{
     entity::{Allocator, Entity, LiveBitSet, WrongGeneration},
     fetch_resources::FetchResources,
     join::{Index, IntoJoin},
-    masked::GuardedJoin,
+    masked::{GuardedJoin, ModifiedJoin, ModifiedJoinMut},
     resource_set::ResourceSet,
     resources::{ResourceConflict, RwResources},
-    tracked::{TrackedBitSet, TrackedStorage},
+    tracked::{ModifiedBitSet, TrackedStorage},
     world_common::{Component, ComponentId, ComponentStorage, ResourceId, WorldResourceId},
 };
 
@@ -432,20 +432,24 @@ where
     R: Deref<Target = ComponentStorage<C>>,
 {
     pub fn tracking_modified(&self) -> bool {
-        self.storage.raw_storage().tracking_modified()
+        self.storage.tracking_modified()
     }
 
-    pub fn modified_indexes(&self) -> &TrackedBitSet {
-        self.storage.raw_storage().modified()
+    pub fn modified_indexes(&self) -> &ModifiedBitSet {
+        self.storage.modified_indexes()
     }
 
     pub fn mark_modified(&self, entity: Entity) -> Result<(), WrongGeneration> {
         if self.entities.is_alive(entity) {
-            self.storage.raw_storage().mark_modified(entity.index());
+            self.storage.mark_modified(entity.index());
             Ok(())
         } else {
             Err(WrongGeneration)
         }
+    }
+
+    pub fn modified(&self) -> ModifiedJoin<C::Storage> {
+        self.storage.modified()
     }
 }
 
@@ -456,11 +460,15 @@ where
     R: DerefMut<Target = ComponentStorage<C>>,
 {
     pub fn set_track_modified(&mut self, flag: bool) {
-        self.storage.raw_storage_mut().set_track_modified(flag);
+        self.storage.set_track_modified(flag);
     }
 
     pub fn clear_modified(&mut self) {
-        self.storage.raw_storage_mut().clear_modified();
+        self.storage.clear_modified();
+    }
+
+    pub fn modified_mut(&mut self) -> ModifiedJoinMut<C::Storage> {
+        self.storage.modified_mut()
     }
 }
 

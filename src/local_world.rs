@@ -11,9 +11,9 @@ use crate::{
     fetch_resources::FetchResources,
     join::{Index, IntoJoin},
     local_resource_set::ResourceSet,
-    masked::GuardedJoin,
+    masked::{GuardedJoin, ModifiedJoin, ModifiedJoinMut},
     resources::{ResourceConflict, RwResources},
-    tracked::{TrackedBitSet, TrackedStorage},
+    tracked::{ModifiedBitSet, TrackedStorage},
     world_common::{Component, ComponentId, ComponentStorage, ResourceId, WorldResourceId},
 };
 
@@ -430,8 +430,8 @@ where
         self.storage.raw_storage().tracking_modified()
     }
 
-    pub fn modified_indexes(&self) -> &TrackedBitSet {
-        self.storage.raw_storage().modified()
+    pub fn modified_indexes(&self) -> &ModifiedBitSet {
+        self.storage.raw_storage().modified_indexes()
     }
 
     pub fn mark_modified(&self, entity: Entity) -> Result<(), WrongGeneration> {
@@ -441,6 +441,10 @@ where
         } else {
             Err(WrongGeneration)
         }
+    }
+
+    pub fn modified(&self) -> ModifiedJoin<C::Storage> {
+        self.storage.modified()
     }
 }
 
@@ -456,6 +460,10 @@ where
 
     pub fn clear_modified(&mut self) {
         self.storage.raw_storage_mut().clear_modified();
+    }
+
+    pub fn modified_mut(&mut self) -> ModifiedJoinMut<C::Storage> {
+        self.storage.modified_mut()
     }
 }
 

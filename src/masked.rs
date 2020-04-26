@@ -5,7 +5,7 @@ use hibitset::{BitIter, BitSet, BitSetLike};
 use crate::{
     join::{Index, Join},
     storage::RawStorage,
-    tracked::TrackedStorage,
+    tracked::{ModifiedBitSet, TrackedStorage},
 };
 
 /// Wraps a `RawStorage` for some component with a `BitSet` mask to provide a safe, `Join`-able
@@ -103,6 +103,43 @@ impl<S: RawStorage> MaskedStorage<S> {
     /// useful to avoid flagging modifications with a `FlaggedStorage`.
     pub fn guard(&mut self) -> GuardedJoin<S> {
         GuardedJoin(self)
+    }
+}
+
+impl<S: TrackedStorage> MaskedStorage<S> {
+    pub fn tracking_modified(&self) -> bool {
+        self.storage.tracking_modified()
+    }
+
+    pub fn modified_indexes(&self) -> &ModifiedBitSet {
+        self.storage.modified_indexes()
+    }
+
+    pub fn set_track_modified(&mut self, flag: bool) {
+        self.storage.set_track_modified(flag);
+    }
+
+    pub fn mark_modified(&self, index: Index) {
+        self.storage.mark_modified(index);
+    }
+
+    pub fn clear_modified(&mut self) {
+        self.storage.clear_modified();
+    }
+
+    /// Returns an `IntoJoin` type which joins over all the modified elements.
+    ///
+    /// The items on the returned join are all `Option<&S::Item>`, removed elements will show up as
+    /// None.
+    pub fn modified(&self) -> ModifiedJoin<S> {
+        ModifiedJoin(self)
+    }
+
+    /// Returns an `IntoJoin` type which joins over all the modified elements mutably.
+    ///
+    /// This is similar to `MaskedStorage::modified`, but returns mutable access to each item.
+    pub fn modified_mut(&mut self) -> ModifiedJoinMut<S> {
+        ModifiedJoinMut(self)
     }
 }
 
@@ -204,5 +241,51 @@ impl<'a, S: RawStorage> ElementGuard<'a, S> {
 impl<'a, S: TrackedStorage> ElementGuard<'a, S> {
     pub fn mark_modified(&self) {
         self.storage.mark_modified(self.index);
+    }
+}
+
+pub struct ModifiedJoin<'a, S: RawStorage>(&'a MaskedStorage<S>);
+
+impl<'a, S: TrackedStorage> Join for ModifiedJoin<'a, S> {
+    type Item = Option<&'a S::Item>;
+    type Access = (&'a BitSet, &'a S);
+    type Mask = &'a ModifiedBitSet;
+
+    fn open(self) -> (Self::Mask, Self::Access) {
+        (
+            &self.0.storage.modified_indexes(),
+            (&self.0.mask, &self.0.storage),
+        )
+    }
+
+    unsafe fn get((mask, storage): &Self::Access, index: Index) -> Self::Item {
+        if mask.contains(index) {
+            Some(storage.get(index))
+        } else {
+            None
+        }
+    }
+}
+
+pub struct ModifiedJoinMut<'a, S: RawStorage>(&'a mut MaskedStorage<S>);
+
+impl<'a, S: TrackedStorage> Join for ModifiedJoinMut<'a, S> {
+    type Item = Option<&'a mut S::Item>;
+    type Access = (&'a BitSet, &'a S);
+    type Mask = &'a ModifiedBitSet;
+
+    fn open(self) -> (Self::Mask, Self::Access) {
+        (
+            &self.0.storage.modified_indexes(),
+            (&self.0.mask, &self.0.storage),
+        )
+    }
+
+    unsafe fn get((mask, storage): &Self::Access, index: Index) -> Self::Item {
+        if mask.contains(index) {
+            Some(storage.get_mut(index))
+        } else {
+            None
+        }
     }
 }
