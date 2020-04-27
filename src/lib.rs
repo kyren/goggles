@@ -17,7 +17,7 @@ pub mod world_common;
 
 pub use {
     self::entity::{Entity, WrongGeneration},
-    fetch_resources::FetchResources,
+    fetch_resources::{FetchNone, FetchResources},
     join::{Index, IntoJoin, IntoJoinExt, Join, JoinIter, JoinIterUnconstrained, JoinParIter},
     local_resource_set::{Read as LocalRead, ResourceSet as LocalResourceSet, Write as LocalWrite},
     local_world::{

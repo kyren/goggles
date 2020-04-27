@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, marker::PhantomData};
 
 use crate::resources::{ResourceConflict, Resources};
 
@@ -13,6 +13,29 @@ pub trait FetchResources<'a> {
 
     fn check_resources() -> Result<Self::Resources, ResourceConflict>;
     fn fetch(source: &'a Self::Source) -> Self;
+}
+
+/// An empty type useful in generic contexts that implements `FetchResources` but does not actually
+/// fetch any resources.
+pub struct FetchNone<S, R>(PhantomData<(S, R)>);
+
+impl<S, R> Default for FetchNone<S, R> {
+    fn default() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<'a, S, R: Resources> FetchResources<'a> for FetchNone<S, R> {
+    type Source = S;
+    type Resources = R;
+
+    fn check_resources() -> Result<Self::Resources, ResourceConflict> {
+        Ok(R::default())
+    }
+
+    fn fetch(_: &'a Self::Source) -> Self {
+        FetchNone::default()
+    }
 }
 
 macro_rules! impl_data {
