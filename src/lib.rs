@@ -30,7 +30,7 @@ pub use {
     par_seq::{Error as SystemError, Par, Pool, Seq, SeqPool, System},
     resource_set::{Read, ResourceSet, Write},
     resources::{ResourceConflict, Resources, RwResources},
-    storage::{DenseVecStorage, HashMapStorage, RawStorage, VecStorage},
+    storage::{DenseStorage, DenseVecStorage, HashMapStorage, RawStorage, VecStorage},
     tracked::{Flagged, TrackedStorage},
     world::{Entities, ReadComponent, ReadResource, World, WriteComponent, WriteResource},
     world_common::{Component, ComponentId, ResourceId, WorldResourceId, WorldResources},

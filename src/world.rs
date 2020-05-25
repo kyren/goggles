@@ -14,6 +14,7 @@ use crate::{
     masked::{GuardedJoin, ModifiedJoin, ModifiedJoinMut},
     resource_set::ResourceSet,
     resources::{ResourceConflict, RwResources},
+    storage::DenseStorage,
     tracked::{ModifiedBitSet, TrackedStorage},
     world_common::{Component, ComponentId, ComponentStorage, ResourceId, WorldResourceId},
 };
@@ -428,6 +429,17 @@ where
 impl<'a, C, R> ComponentAccess<'a, C, R>
 where
     C: Component,
+    C::Storage: DenseStorage,
+    R: Deref<Target = ComponentStorage<C>>,
+{
+    pub fn as_slice(&self) -> &[C] {
+        self.storage.as_slice()
+    }
+}
+
+impl<'a, C, R> ComponentAccess<'a, C, R>
+where
+    C: Component,
     C::Storage: TrackedStorage,
     R: Deref<Target = ComponentStorage<C>>,
 {
@@ -450,6 +462,17 @@ where
 
     pub fn modified(&self) -> ModifiedJoin<C::Storage> {
         self.storage.modified()
+    }
+}
+
+impl<'a, C, R> ComponentAccess<'a, C, R>
+where
+    C: Component,
+    C::Storage: DenseStorage,
+    R: DerefMut<Target = ComponentStorage<C>>,
+{
+    pub fn as_mut_slice(&mut self) -> &mut [C] {
+        self.storage.as_mut_slice()
     }
 }
 

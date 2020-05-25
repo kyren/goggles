@@ -1,4 +1,9 @@
-use std::{cell::UnsafeCell, collections::HashMap, mem::MaybeUninit, ptr};
+use std::{
+    cell::UnsafeCell,
+    collections::HashMap,
+    mem::{self, MaybeUninit},
+    ptr,
+};
 
 use crate::join::Index;
 
@@ -40,6 +45,13 @@ pub trait RawStorage {
     /// You must only call `remove` on a non-empty index (after you have inserted a value with
     /// `insert`).  After calling `remove` the index becomes empty.
     unsafe fn remove(&mut self, index: Index) -> Self::Item;
+}
+
+/// Trait for storages that hold their populated values densely in a contiguous slice, enabling
+/// faster access to populated values.  The slice is not guaranteed to be in any particular order.
+pub trait DenseStorage: RawStorage {
+    fn as_slice(&self) -> &[Self::Item];
+    fn as_mut_slice(&mut self) -> &mut [Self::Item];
 }
 
 pub struct VecStorage<T>(Vec<UnsafeCell<MaybeUninit<T>>>);
@@ -137,6 +149,16 @@ impl<T> RawStorage for DenseVecStorage<T> {
             .write(dind);
         self.indexes.swap_remove(dind as usize);
         self.values.swap_remove(dind as usize).into_inner()
+    }
+}
+
+impl<T> DenseStorage for DenseVecStorage<T> {
+    fn as_slice(&self) -> &[Self::Item] {
+        unsafe { mem::transmute::<&[UnsafeCell<T>], &[T]>(&self.values) }
+    }
+
+    fn as_mut_slice(&mut self) -> &mut [Self::Item] {
+        unsafe { mem::transmute::<&mut [UnsafeCell<T>], &mut [T]>(&mut self.values) }
     }
 }
 

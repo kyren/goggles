@@ -4,7 +4,7 @@ use hibitset::{BitIter, BitSet, BitSetLike};
 
 use crate::{
     join::{Index, Join},
-    storage::RawStorage,
+    storage::{DenseStorage, RawStorage},
     tracked::{ModifiedBitSet, TrackedStorage},
 };
 
@@ -103,6 +103,16 @@ impl<S: RawStorage> MaskedStorage<S> {
     /// useful to avoid flagging modifications with a `FlaggedStorage`.
     pub fn guard(&mut self) -> GuardedJoin<S> {
         GuardedJoin(self)
+    }
+}
+
+impl<S: DenseStorage> MaskedStorage<S> {
+    pub fn as_slice(&self) -> &[S::Item] {
+        self.storage.as_slice()
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [S::Item] {
+        self.storage.as_mut_slice()
     }
 }
 
