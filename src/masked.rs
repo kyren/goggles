@@ -57,6 +57,18 @@ impl<S: RawStorage> MaskedStorage<S> {
         }
     }
 
+    pub fn get_or_insert_with(
+        &mut self,
+        index: Index,
+        f: impl FnOnce() -> S::Item,
+    ) -> &mut S::Item {
+        if !self.mask.contains(index) {
+            self.mask.add(index);
+            unsafe { self.storage.insert(index, f()) };
+        }
+        unsafe { self.storage.get_mut(index) }
+    }
+
     pub fn insert(&mut self, index: Index, mut v: S::Item) -> Option<S::Item> {
         if self.mask.contains(index) {
             mem::swap(&mut v, unsafe { self.storage.get_mut(index) });

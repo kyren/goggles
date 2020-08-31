@@ -394,6 +394,18 @@ where
         }
     }
 
+    pub fn get_or_insert_with(
+        &mut self,
+        e: Entity,
+        f: impl FnOnce() -> C,
+    ) -> Result<&mut C, WrongGeneration> {
+        if self.entities.is_alive(e) {
+            Ok(self.storage.get_or_insert_with(e.index(), f))
+        } else {
+            Err(WrongGeneration)
+        }
+    }
+
     pub fn insert(&mut self, e: Entity, c: C) -> Result<Option<C>, WrongGeneration> {
         if self.entities.is_alive(e) {
             Ok(self.storage.insert(e.index(), c))
