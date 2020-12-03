@@ -27,26 +27,24 @@ impl SystemError for TestError {
 }
 
 macro_rules! test_system {
-        ($s:ident, $($resources:expr),*) => {
-            struct $s;
+    ($s:ident, $($resources:expr),*) => {
+        struct $s;
 
-            impl System for $s {
-                type Source = ();
-                type Resources = TestResources;
-                type Pool = SeqPool;
-                type Args = ();
-                type Error = TestError;
+        impl System<()> for $s {
+            type Resources = TestResources;
+            type Pool = SeqPool;
+            type Error = TestError;
 
-                fn check_resources(&self) -> Result<TestResources, ResourceConflict> {
-                    Ok(TestResources([$($resources),*].iter().copied().collect()))
-                }
+            fn check_resources(&self) -> Result<TestResources, ResourceConflict> {
+                Ok(TestResources([$($resources),*].iter().copied().collect()))
+            }
 
-                fn run(&mut self, _: &Self::Pool, _: &Self::Source, _: &Self::Args) -> Result<(), Self::Error> {
-                    Ok(())
-                }
+            fn run(&mut self, _: &Self::Pool, _: ()) -> Result<(), Self::Error> {
+                Ok(())
             }
         }
     }
+}
 
 test_system!(SystemA, "resource_a", "resource_b");
 test_system!(SystemB, "resource_c");
@@ -58,11 +56,11 @@ test_system!(SystemE, "resource_e");
 fn test_par_seq() {
     let mut sys = par![seq![SystemA, SystemB], SystemD, SystemE];
     sys.check_resources().unwrap();
-    sys.run(&SeqPool, &(), &()).unwrap();
+    sys.run(&SeqPool, ()).unwrap();
 
     let mut sys = seq![par![SystemA, SystemB], SystemC, SystemD, SystemE];
     sys.check_resources().unwrap();
-    sys.run(&SeqPool, &(), &()).unwrap();
+    sys.run(&SeqPool, ()).unwrap();
 }
 
 #[test]
