@@ -103,7 +103,7 @@ impl ResourceSet {
     /// Fetch the given `FetchResources`.
     pub fn fetch<'a, F>(&'a self) -> F
     where
-        F: FetchResources<'a, Source = ResourceSet, Resources = RwResources<ResourceId>>,
+        F: FetchResources<'a, Self>,
     {
         F::fetch(self)
     }
@@ -124,11 +124,10 @@ impl ResourceId {
 /// Panics if the resource does not exist or has already been borrowed for writing.
 pub struct Read<'a, T>(AtomicRef<'a, T>);
 
-impl<'a, T> FetchResources<'a> for Read<'a, T>
+impl<'a, T> FetchResources<'a, ResourceSet> for Read<'a, T>
 where
     T: Send + Sync + 'static,
 {
-    type Source = ResourceSet;
     type Resources = RwResources<ResourceId>;
 
     fn check_resources() -> Result<RwResources<ResourceId>, ResourceConflict> {
@@ -157,11 +156,10 @@ impl<'a, T> Deref for Read<'a, T> {
 /// Panics if the resource does not exist or has already been borrowed for writing.
 pub struct Write<'a, T>(AtomicRefMut<'a, T>);
 
-impl<'a, T> FetchResources<'a> for Write<'a, T>
+impl<'a, T> FetchResources<'a, ResourceSet> for Write<'a, T>
 where
     T: Send + 'static,
 {
-    type Source = ResourceSet;
     type Resources = RwResources<ResourceId>;
 
     fn check_resources() -> Result<RwResources<ResourceId>, ResourceConflict> {

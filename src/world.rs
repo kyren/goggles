@@ -193,7 +193,7 @@ impl World {
 
     pub fn fetch<'a, F>(&'a self) -> F
     where
-        F: FetchResources<'a, Source = World, Resources = RwResources<WorldResourceId>>,
+        F: FetchResources<'a, Self>,
     {
         F::fetch(self)
     }
@@ -252,8 +252,7 @@ impl<'a> IntoJoin for &'a Entities<'a> {
     }
 }
 
-impl<'a> FetchResources<'a> for Entities<'a> {
-    type Source = World;
+impl<'a> FetchResources<'a, World> for Entities<'a> {
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
@@ -293,11 +292,10 @@ where
 /// Panics if the resource does not exist or has already been borrowed for writing.
 pub type ReadResource<'a, R> = ResourceAccess<AtomicRef<'a, R>>;
 
-impl<'a, R> FetchResources<'a> for ReadResource<'a, R>
+impl<'a, R> FetchResources<'a, World> for ReadResource<'a, R>
 where
     R: Send + Sync + 'static,
 {
-    type Source = World;
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
@@ -315,11 +313,10 @@ where
 /// Panics if the resource does not exist or has already been borrowed for writing.
 pub type WriteResource<'a, R> = ResourceAccess<AtomicRefMut<'a, R>>;
 
-impl<'a, R> FetchResources<'a> for WriteResource<'a, R>
+impl<'a, R> FetchResources<'a, World> for WriteResource<'a, R>
 where
     R: Send + 'static,
 {
-    type Source = World;
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
@@ -539,12 +536,11 @@ where
 /// Panics if the component does not exist or has already been borrowed for writing.
 pub type ReadComponent<'a, C> = ComponentAccess<'a, C, AtomicRef<'a, ComponentStorage<C>>>;
 
-impl<'a, C> FetchResources<'a> for ReadComponent<'a, C>
+impl<'a, C> FetchResources<'a, World> for ReadComponent<'a, C>
 where
     C: Component + Send + Sync + 'static,
     C::Storage: Send + Sync,
 {
-    type Source = World;
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
@@ -564,12 +560,11 @@ where
 /// Panics if the component does not exist or has already been borrowed for writing.
 pub type WriteComponent<'a, C> = ComponentAccess<'a, C, AtomicRefMut<'a, ComponentStorage<C>>>;
 
-impl<'a, C> FetchResources<'a> for WriteComponent<'a, C>
+impl<'a, C> FetchResources<'a, World> for WriteComponent<'a, C>
 where
     C: Component + Send + 'static,
     C::Storage: Send,
 {
-    type Source = World;
     type Resources = RwResources<WorldResourceId>;
 
     fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {

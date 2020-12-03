@@ -7,12 +7,11 @@ use crate::resources::{ResourceConflict, Resources};
 ///
 /// Tuples of types that implement `FetchResources` automatically themselves implement
 /// `FetchResources` and correctly find the union of the resources they use.
-pub trait FetchResources<'a> {
-    type Source;
+pub trait FetchResources<'a, Source> {
     type Resources: Resources;
 
     fn check_resources() -> Result<Self::Resources, ResourceConflict>;
-    fn fetch(source: &'a Self::Source) -> Self;
+    fn fetch(source: &'a Source) -> Self;
 }
 
 /// An empty type useful in generic contexts that implements `FetchResources` but does not actually
@@ -25,33 +24,31 @@ impl<S, R> Default for FetchNone<S, R> {
     }
 }
 
-impl<'a, S, R: Resources> FetchResources<'a> for FetchNone<S, R> {
-    type Source = S;
+impl<'a, S, R: Resources> FetchResources<'a, S> for FetchNone<S, R> {
     type Resources = R;
 
     fn check_resources() -> Result<Self::Resources, ResourceConflict> {
         Ok(R::default())
     }
 
-    fn fetch(_: &'a Self::Source) -> Self {
+    fn fetch(_: &'a S) -> Self {
         FetchNone::default()
     }
 }
 
 macro_rules! impl_data {
     ($($ty:ident),*) => {
-        impl<'a, ST, RT, $($ty),*> FetchResources<'a> for ($($ty,)*)
+        impl<'a, ST, RT, $($ty),*> FetchResources<'a, ST> for ($($ty,)*)
         where
             RT: Resources,
-            $($ty: FetchResources<'a, Source = ST, Resources = RT>),*
+            $($ty: FetchResources<'a, ST, Resources = RT>),*
         {
-            type Source = ST;
             type Resources = RT;
 
             fn check_resources() -> Result<Self::Resources, ResourceConflict> {
                 let mut resources = Self::Resources::default();
                 $({
-                    let r = <$ty as FetchResources>::check_resources()?;
+                    let r = <$ty as FetchResources<ST>>::check_resources()?;
                     if resources.conflicts_with(&r) {
                         return Err(ResourceConflict { type_name: type_name::<Self>() });
                     }
@@ -60,8 +57,8 @@ macro_rules! impl_data {
                 Ok(resources)
             }
 
-            fn fetch(source: &'a Self::Source) -> Self {
-                ($(<$ty as FetchResources<'a>>::fetch(source),)*)
+            fn fetch(source: &'a ST) -> Self {
+                ($(<$ty as FetchResources<'a, ST>>::fetch(source),)*)
             }
         }
     };
