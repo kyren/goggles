@@ -63,6 +63,17 @@ where
         self.writes.iter()
     }
 
+    pub fn map<R2, F>(&self, f: F) -> RwResources<R2>
+    where
+        R2: Eq + Hash,
+        F: Fn(&R) -> R2,
+    {
+        RwResources {
+            reads: self.reads.iter().map(&f).collect(),
+            writes: self.writes.iter().map(&f).collect(),
+        }
+    }
+
     pub fn add_read(&mut self, r: R) {
         if !self.writes.contains(&r) {
             self.reads.insert(r);
