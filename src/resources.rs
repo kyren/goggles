@@ -55,6 +55,14 @@ where
         RwResources { reads, writes }
     }
 
+    pub fn reads(&self) -> impl Iterator<Item = &R> + '_ {
+        self.reads.iter()
+    }
+
+    pub fn writes(&self) -> impl Iterator<Item = &R> + '_ {
+        self.writes.iter()
+    }
+
     pub fn add_read(&mut self, r: R) {
         if !self.writes.contains(&r) {
             self.reads.insert(r);
@@ -64,6 +72,18 @@ where
     pub fn add_write(&mut self, r: R) {
         self.reads.remove(&r);
         self.writes.insert(r);
+    }
+
+    pub fn add_reads<I: IntoIterator<Item = R>>(&mut self, i: I) {
+        for r in i.into_iter() {
+            self.add_read(r);
+        }
+    }
+
+    pub fn add_writes<I: IntoIterator<Item = R>>(&mut self, i: I) {
+        for r in i.into_iter() {
+            self.add_write(r);
+        }
     }
 
     pub fn read(mut self, r: R) -> Self {
