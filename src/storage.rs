@@ -1,9 +1,10 @@
 use std::{
     cell::UnsafeCell,
-    collections::HashMap,
     mem::{self, MaybeUninit},
     ptr,
 };
+
+use rustc_hash::FxHashMap;
 
 use crate::join::Index;
 
@@ -162,14 +163,14 @@ impl<T> DenseStorage for DenseVecStorage<T> {
     }
 }
 
-pub struct HashMapStorage<T>(HashMap<Index, UnsafeCell<T>>);
+pub struct HashMapStorage<T>(FxHashMap<Index, UnsafeCell<T>>);
 
 unsafe impl<T: Send> Send for HashMapStorage<T> {}
 unsafe impl<T: Sync> Sync for HashMapStorage<T> {}
 
 impl<T> Default for HashMapStorage<T> {
     fn default() -> Self {
-        Self(HashMap::default())
+        Self(FxHashMap::default())
     }
 }
 

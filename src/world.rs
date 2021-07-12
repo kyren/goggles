@@ -1,11 +1,11 @@
 use std::{
     any::TypeId,
-    collections::HashMap,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
 
 use atomic_refcell::{AtomicRef, AtomicRefMut};
+use rustc_hash::FxHashMap;
 
 use crate::{
     entity::{Allocator, Entity, LiveBitSet, WrongGeneration},
@@ -24,7 +24,7 @@ pub struct World {
     allocator: Allocator,
     resources: ResourceSet,
     components: ResourceSet,
-    remove_components: HashMap<TypeId, Box<dyn Fn(&ResourceSet, &[Entity]) + Send + Sync>>,
+    remove_components: FxHashMap<TypeId, Box<dyn Fn(&ResourceSet, &[Entity]) + Send + Sync>>,
     killed: Vec<Entity>,
 }
 
@@ -34,7 +34,7 @@ impl World {
             allocator: Allocator::new(),
             resources: ResourceSet::new(),
             components: ResourceSet::new(),
-            remove_components: HashMap::new(),
+            remove_components: FxHashMap::default(),
             killed: Vec::new(),
         }
     }
