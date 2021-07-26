@@ -51,8 +51,11 @@ fn test_flagged() {
         component_b.set_track_modified(true);
 
         for &e in &evec {
-            component_a.update(e, CA(e.index() as i32)).unwrap();
-            component_b.update(e, CB(e.index() as i32)).unwrap();
+            let mut a = component_a.get_guard(e).unwrap();
+            a.get_mut().0 = e.index() as i32;
+
+            let mut b = component_b.get_guard(e).unwrap();
+            b.get_mut().0 = e.index() as i32;
         }
 
         assert_eq!(component_a.modified_indexes().iter().count(), 100);
@@ -63,10 +66,16 @@ fn test_flagged() {
 
         for (_, mut a, mut b) in (&entities, component_a.guard(), component_b.guard()).join() {
             let av = a.get().0;
-            a.update(CA(av - av % 2 + 1));
+            let an = av - av % 2 + 1;
+            if av != an {
+                a.get_mut().0 = an;
+            }
 
             let bv = b.get().0;
-            b.update(CB(bv - bv % 2 + 1));
+            let bn = bv - bv % 2 + 1;
+            if bv != bn {
+                b.get_mut().0 = bn;
+            }
         }
 
         assert_eq!(component_a.modified_indexes().iter().count(), 50);
@@ -134,8 +143,11 @@ fn test_local_flagged() {
         component_b.set_track_modified(true);
 
         for &e in &evec {
-            component_a.update(e, CA(e.index() as i32)).unwrap();
-            component_b.update(e, CB(e.index() as i32)).unwrap();
+            let mut a = component_a.get_guard(e).unwrap();
+            a.get_mut().0 = e.index() as i32;
+
+            let mut b = component_b.get_guard(e).unwrap();
+            b.get_mut().0 = e.index() as i32;
         }
 
         assert_eq!(component_a.modified_indexes().iter().count(), 100);
@@ -146,10 +158,16 @@ fn test_local_flagged() {
 
         for (_, mut a, mut b) in (&entities, component_a.guard(), component_b.guard()).join() {
             let av = a.get().0;
-            a.update(CA(av - av % 2 + 1));
+            let an = av - av % 2 + 1;
+            if av != an {
+                a.get_mut().0 = an;
+            }
 
             let bv = b.get().0;
-            b.update(CB(bv - bv % 2 + 1));
+            let bn = bv - bv % 2 + 1;
+            if bv != bn {
+                b.get_mut().0 = bn;
+            }
         }
 
         assert_eq!(component_a.modified_indexes().iter().count(), 50);

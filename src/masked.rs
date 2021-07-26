@@ -57,6 +57,22 @@ impl<S: RawStorage> MaskedStorage<S> {
         }
     }
 
+    /// Returns a `GuardedElement` which does not automatically call `RawStorage::get_mut` on the
+    /// underlying storage, which can be useful to avoid flagging modification in a
+    /// `FlaggedStorage`.
+    ///
+    /// This is the same type returned by a guarded join.
+    pub fn get_guard<'a>(&'a mut self, index: Index) -> Option<GuardedElement<'a, S>> {
+        if self.mask.contains(index) {
+            Some(GuardedElement {
+                storage: &self.storage,
+                index,
+            })
+        } else {
+            None
+        }
+    }
+
     pub fn get_or_insert_with(
         &mut self,
         index: Index,
@@ -76,27 +92,6 @@ impl<S: RawStorage> MaskedStorage<S> {
         } else {
             self.mask.add(index);
             unsafe { self.storage.insert(index, v) };
-            None
-        }
-    }
-
-    /// Update the value at this index only if it has changed.
-    ///
-    /// This is useful when combined with `FlaggedStorage`, which keeps track of modified
-    /// components.  By using this method, you can avoid flagging changes unnecessarily when the new
-    /// value of the component is equal to the old one.
-    pub fn update(&mut self, index: Index, mut v: S::Item) -> Option<S::Item>
-    where
-        S::Item: PartialEq,
-    {
-        if self.mask.contains(index) {
-            unsafe {
-                if &v != self.storage.get(index) {
-                    mem::swap(&mut v, self.storage.get_mut(index));
-                }
-            }
-            Some(v)
-        } else {
             None
         }
     }
@@ -217,7 +212,7 @@ impl<S: RawStorage> Drop for MaskedStorage<S> {
 pub struct GuardedJoin<'a, S: RawStorage>(&'a mut MaskedStorage<S>);
 
 impl<'a, S: RawStorage> Join for GuardedJoin<'a, S> {
-    type Item = ElementGuard<'a, S>;
+    type Item = GuardedElement<'a, S>;
     type Access = &'a S;
     type Mask = &'a BitSet;
 
@@ -226,19 +221,19 @@ impl<'a, S: RawStorage> Join for GuardedJoin<'a, S> {
     }
 
     unsafe fn get(access: &Self::Access, index: Index) -> Self::Item {
-        ElementGuard {
+        GuardedElement {
             storage: *access,
             index,
         }
     }
 }
 
-pub struct ElementGuard<'a, S> {
+pub struct GuardedElement<'a, S> {
     storage: &'a S,
     index: Index,
 }
 
-impl<'a, S: RawStorage> ElementGuard<'a, S> {
+impl<'a, S: RawStorage> GuardedElement<'a, S> {
     pub fn get(&self) -> &'a S::Item {
         unsafe { self.storage.get(self.index) }
     }
@@ -246,21 +241,9 @@ impl<'a, S: RawStorage> ElementGuard<'a, S> {
     pub fn get_mut(&mut self) -> &'a mut S::Item {
         unsafe { self.storage.get_mut(self.index) }
     }
-
-    pub fn update(&mut self, mut v: S::Item) -> S::Item
-    where
-        S::Item: PartialEq,
-    {
-        unsafe {
-            if &v != self.storage.get(self.index) {
-                mem::swap(&mut v, self.storage.get_mut(self.index));
-            }
-            v
-        }
-    }
 }
 
-impl<'a, S: TrackedStorage> ElementGuard<'a, S> {
+impl<'a, S: TrackedStorage> GuardedElement<'a, S> {
     pub fn mark_modified(&self) {
         self.storage.mark_modified(self.index);
     }

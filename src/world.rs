@@ -11,7 +11,7 @@ use crate::{
     entity::{Allocator, Entity, LiveBitSet, WrongGeneration},
     fetch_resources::FetchResources,
     join::{Index, IntoJoin},
-    masked::{GuardedJoin, ModifiedJoin, ModifiedJoinMut},
+    masked::{GuardedElement, GuardedJoin, ModifiedJoin, ModifiedJoinMut},
     resource_set::ResourceSet,
     resources::{ResourceConflict, RwResources},
     storage::DenseStorage,
@@ -391,6 +391,14 @@ where
         }
     }
 
+    pub fn get_guard<'b>(&'b mut self, e: Entity) -> Option<GuardedElement<'b, C::Storage>> {
+        if self.entities.is_alive(e) {
+            self.storage.get_guard(e.index())
+        } else {
+            None
+        }
+    }
+
     pub fn get_or_insert_with(
         &mut self,
         e: Entity,
@@ -406,17 +414,6 @@ where
     pub fn insert(&mut self, e: Entity, c: C) -> Result<Option<C>, WrongGeneration> {
         if self.entities.is_alive(e) {
             Ok(self.storage.insert(e.index(), c))
-        } else {
-            Err(WrongGeneration)
-        }
-    }
-
-    pub fn update(&mut self, e: Entity, c: C) -> Result<Option<C>, WrongGeneration>
-    where
-        C: PartialEq,
-    {
-        if self.entities.is_alive(e) {
-            Ok(self.storage.update(e.index(), c))
         } else {
             Err(WrongGeneration)
         }
