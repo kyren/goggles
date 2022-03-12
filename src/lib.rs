@@ -27,7 +27,7 @@ pub use {
     },
     make_sync::MakeSync,
     masked::MaskedStorage,
-    par_seq::{Error as SystemError, Par, Pool, Seq, SeqPool, System},
+    par_seq::{auto_schedule, Error as SystemError, Par, Pool, Seq, SeqPool, System},
     resource_set::{Read, ResourceSet, Write},
     resources::{ResourceConflict, Resources, RwResources},
     storage::{DenseStorage, DenseVecStorage, HashMapStorage, RawStorage, VecStorage},

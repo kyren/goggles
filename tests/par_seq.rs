@@ -1,6 +1,8 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::mpsc};
 
-use goggles::{par, seq, ResourceConflict, Resources, RwResources, SeqPool, System, SystemError};
+use goggles::{
+    auto_schedule, par, seq, ResourceConflict, Resources, RwResources, SeqPool, System, SystemError,
+};
 
 #[derive(Default)]
 struct TestResources(HashSet<&'static str>);
@@ -90,4 +92,44 @@ fn test_read_write_resources() {
     rw4.union(&rw1);
     rw4.union(&rw2);
     assert!(rw4.conflicts_with(&rw3));
+}
+
+#[test]
+fn test_auto_schedule() {
+    struct TestSystem(&'static str, i32, mpsc::Sender<i32>);
+
+    impl System<()> for TestSystem {
+        type Resources = TestResources;
+        type Pool = SeqPool;
+        type Error = TestError;
+
+        fn check_resources(&self) -> Result<TestResources, ResourceConflict> {
+            Ok(TestResources([self.0].into_iter().collect()))
+        }
+
+        fn run(&mut self, _: &Self::Pool, _: ()) -> Result<(), Self::Error> {
+            self.2.send(self.1).map_err(|_| TestError)
+        }
+    }
+
+    let (a_sender, a_receiver) = mpsc::channel();
+    let (b_sender, b_receiver) = mpsc::channel();
+
+    auto_schedule([
+        TestSystem("A", 1, a_sender.clone()),
+        TestSystem("B", 1, b_sender.clone()),
+        TestSystem("B", 2, b_sender.clone()),
+        TestSystem("B", 3, b_sender.clone()),
+        TestSystem("A", 2, a_sender.clone()),
+        TestSystem("A", 3, a_sender.clone()),
+    ])
+    .unwrap()
+    .run(&SeqPool, ())
+    .unwrap();
+
+    drop(a_sender);
+    drop(b_sender);
+
+    assert_eq!(a_receiver.iter().collect::<Vec<_>>(), vec![1, 2, 3]);
+    assert_eq!(b_receiver.iter().collect::<Vec<_>>(), vec![1, 2, 3]);
 }

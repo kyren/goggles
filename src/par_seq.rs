@@ -1,4 +1,4 @@
-use std::any::type_name;
+use std::{any::type_name, mem};
 
 use crate::resources::{ResourceConflict, Resources};
 
@@ -80,7 +80,7 @@ where
     H: System<A, Resources = R, Pool = P, Error = E> + Send,
     T: System<A, Resources = R, Pool = P, Error = E> + Send,
     A: Copy + Send,
-    R: Resources + Send,
+    R: Resources,
     P: Pool + Sync,
     E: Error + Send,
 {
@@ -176,7 +176,132 @@ macro_rules! seq {
     };
 }
 
-/// A system runner that runs parallel systems single-threaded in the current thread.
+pub struct ParList<S>(pub Vec<S>);
+
+impl<A, S> System<A> for ParList<S>
+where
+    A: Copy + Send,
+    S: System<A> + Send,
+    S::Pool: Sync,
+    S::Error: Send,
+{
+    type Resources = S::Resources;
+    type Pool = S::Pool;
+    type Error = S::Error;
+
+    fn check_resources(&self) -> Result<Self::Resources, ResourceConflict> {
+        let mut r = S::Resources::default();
+        for s in &self.0 {
+            let sr = s.check_resources()?;
+            if sr.conflicts_with(&r) {
+                return Err(ResourceConflict {
+                    type_name: type_name::<Self>(),
+                });
+            }
+            r.union(&sr);
+        }
+        Ok(r)
+    }
+
+    fn run(&mut self, pool: &Self::Pool, args: A) -> Result<(), Self::Error> {
+        fn run<A, S>(s: &mut [S], pool: &S::Pool, args: A) -> Result<(), S::Error>
+        where
+            A: Copy + Send,
+            S: System<A> + Send,
+            S::Pool: Sync,
+            S::Error: Send,
+        {
+            if s.len() == 0 {
+                Ok(())
+            } else if s.len() == 1 {
+                s[0].run(pool, args)
+            } else {
+                let mid = s.len() / 2;
+                let (lo, hi) = s.split_at_mut(mid);
+                match pool.join(move || run(lo, pool, args), move || run(hi, pool, args)) {
+                    (Ok(()), Ok(())) => Ok(()),
+                    (Err(a), Ok(())) => Err(a),
+                    (Ok(()), Err(b)) => Err(b),
+                    (Err(a), Err(b)) => Err(a.combine(b)),
+                }
+            }
+        }
+
+        run(&mut self.0[..], pool, args)
+    }
+}
+
+pub struct SeqList<S>(pub Vec<S>);
+
+impl<A, S: System<A>> System<A> for SeqList<S>
+where
+    A: Copy,
+    S: System<A>,
+{
+    type Resources = S::Resources;
+    type Pool = S::Pool;
+    type Error = S::Error;
+
+    fn check_resources(&self) -> Result<Self::Resources, ResourceConflict> {
+        let mut r = S::Resources::default();
+        for s in &self.0 {
+            r.union(&s.check_resources()?);
+        }
+        Ok(r)
+    }
+
+    fn run(&mut self, pool: &Self::Pool, args: A) -> Result<(), Self::Error> {
+        for s in &mut self.0 {
+            s.run(pool, args)?;
+        }
+        Ok(())
+    }
+}
+
+/// Takes a list of systems all of the same type and makes them as parallel as possible without
+/// conflicts and without changing the overall system order.
+///
+/// The parallelization is done eagerly and in order, the method tries to insert systems in order to
+/// run in parallel until a resource conflict is detected, then runs the systems determined not to
+/// conflict in parallel with each other and in sequence with the remaining systems.  The algorithm
+/// then repeats this process with the remaining systems until there are no more systems remaining.
+pub fn auto_schedule<A, S>(
+    systems: impl IntoIterator<Item = S>,
+) -> Result<
+    impl System<A, Resources = S::Resources, Pool = S::Pool, Error = S::Error>,
+    ResourceConflict,
+>
+where
+    A: Copy + Send + 'static,
+    S: System<A> + Send + 'static,
+    S::Pool: Sync,
+    S::Error: Send,
+{
+    let mut seq = Vec::new();
+
+    let mut par = Vec::new();
+    let mut par_resources = S::Resources::default();
+
+    for system in systems {
+        let sys_resources = system.check_resources()?;
+        if sys_resources.conflicts_with(&par_resources) {
+            assert!(par.len() != 0);
+            seq.push(ParList(mem::take(&mut par)));
+            par_resources = S::Resources::default();
+        }
+
+        par_resources.union(&sys_resources);
+        par.push(system);
+    }
+
+    if !par.is_empty() {
+        seq.push(ParList(par));
+    }
+
+    Ok(SeqList(seq))
+}
+
+/// A basic system runner that runs all systems sequentially in the current thread.
 #[derive(Default)]
 pub struct SeqPool;
 
