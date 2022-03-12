@@ -117,7 +117,7 @@ where
 macro_rules! par {
     ($head:expr, $tail:expr $(, $rest:expr)* $(,)?) => {
         {
-            $crate::par_seq::Par::new($head, $tail)
+            $crate::system::Par::new($head, $tail)
                 $(.with($rest))*
         }
     };
@@ -170,7 +170,7 @@ where
 macro_rules! seq {
     ($head:expr, $tail:expr $(, $rest:expr)* $(,)?) => {
         {
-            $crate::par_seq::Seq::new($head, $tail)
+            $crate::system::Seq::new($head, $tail)
                 $(.with($rest))*
         }
     };

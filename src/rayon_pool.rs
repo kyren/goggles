@@ -1,4 +1,4 @@
-use crate::par_seq::Pool;
+use crate::system::Pool;
 
 /// A system runner that runs parallel systems using `rayon::join`.
 #[derive(Default)]

@@ -7,10 +7,10 @@ pub mod local_resource_set;
 pub mod local_world;
 pub mod make_sync;
 pub mod masked;
-pub mod par_seq;
 pub mod resource_set;
 pub mod resources;
 pub mod storage;
+pub mod system;
 pub mod tracked;
 pub mod world;
 pub mod world_common;
@@ -27,10 +27,10 @@ pub use {
     },
     make_sync::MakeSync,
     masked::MaskedStorage,
-    par_seq::{auto_schedule, Error as SystemError, Par, Pool, Seq, SeqPool, System},
     resource_set::{Read, ResourceSet, Write},
     resources::{ResourceConflict, Resources, RwResources},
     storage::{DenseStorage, DenseVecStorage, HashMapStorage, RawStorage, VecStorage},
+    system::{auto_schedule, Error as SystemError, Par, Pool, Seq, SeqPool, System},
     tracked::{Flagged, TrackedStorage},
     world::{Entities, ReadComponent, ReadResource, World, WriteComponent, WriteResource},
     world_common::{Component, ComponentId, ResourceId, WorldResourceId, WorldResources},
