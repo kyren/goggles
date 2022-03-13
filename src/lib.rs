@@ -30,7 +30,7 @@ pub use {
     resource_set::{Read, ResourceSet, Write},
     resources::{ResourceConflict, Resources, RwResources},
     storage::{DenseStorage, DenseVecStorage, HashMapStorage, RawStorage, VecStorage},
-    system::{auto_schedule, Error as SystemError, Par, Pool, Seq, SeqPool, System},
+    system::{parallelize, Error as SystemError, Par, Pool, Seq, SeqPool, System},
     tracked::{Flagged, TrackedStorage},
     world::{Entities, ReadComponent, ReadResource, World, WriteComponent, WriteResource},
     world_common::{Component, ComponentId, ResourceId, WorldResourceId, WorldResources},

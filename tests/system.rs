@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::mpsc};
 
 use goggles::{
-    auto_schedule, par, seq, ResourceConflict, Resources, RwResources, SeqPool, System, SystemError,
+    par, parallelize, seq, ResourceConflict, Resources, RwResources, SeqPool, System, SystemError,
 };
 
 #[derive(Default)]
@@ -95,7 +95,7 @@ fn test_read_write_resources() {
 }
 
 #[test]
-fn test_auto_schedule() {
+fn test_parallelize() {
     struct TestSystem(&'static str, i32, mpsc::Sender<i32>);
 
     impl System<()> for TestSystem {
@@ -115,7 +115,7 @@ fn test_auto_schedule() {
     let (a_sender, a_receiver) = mpsc::channel();
     let (b_sender, b_receiver) = mpsc::channel();
 
-    auto_schedule([
+    parallelize([
         TestSystem("A", 1, a_sender.clone()),
         TestSystem("B", 1, b_sender.clone()),
         TestSystem("B", 2, b_sender.clone()),

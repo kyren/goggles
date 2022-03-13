@@ -265,7 +265,7 @@ where
 /// run in parallel until a resource conflict is detected, then runs the systems determined not to
 /// conflict in parallel with each other and in sequence with the remaining systems.  The algorithm
 /// then repeats this process with the remaining systems until there are no more systems remaining.
-pub fn auto_schedule<A, S>(
+pub fn parallelize<A, S>(
     systems: impl IntoIterator<Item = S>,
 ) -> Result<
     impl System<A, Resources = S::Resources, Pool = S::Pool, Error = S::Error>,
