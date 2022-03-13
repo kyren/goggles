@@ -267,10 +267,7 @@ where
 /// then repeats this process with the remaining systems until there are no more systems remaining.
 pub fn parallelize<A, S>(
     systems: impl IntoIterator<Item = S>,
-) -> Result<
-    impl System<A, Resources = S::Resources, Pool = S::Pool, Error = S::Error>,
-    ResourceConflict,
->
+) -> Result<SeqList<ParList<S>>, ResourceConflict>
 where
     A: Copy + Send + 'static,
     S: System<A> + Send + 'static,
