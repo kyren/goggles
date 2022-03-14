@@ -11,7 +11,7 @@ pub trait Resources: Default {
     fn conflicts_with(&self, other: &Self) -> bool;
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, Error)]
 #[error("resource conflict in {type_name:?}")]
 pub struct ResourceConflict {
     pub type_name: &'static str,
@@ -21,6 +21,7 @@ pub struct ResourceConflict {
 ///
 /// Two read locks for the same resource do not conflict, but a read and a write or two writes to
 /// the same resource do.
+#[derive(Debug, Clone)]
 pub struct RwResources<R> {
     reads: HashSet<R>,
     writes: HashSet<R>,
