@@ -1,8 +1,10 @@
 pub use hibitset;
 
+pub mod any_components;
 pub mod entity;
 pub mod fetch_resources;
 pub mod join;
+pub mod local_any_components;
 pub mod local_resource_set;
 pub mod local_world;
 pub mod make_sync;
@@ -17,8 +19,12 @@ pub mod world_common;
 
 pub use {
     self::entity::{Entity, WrongGeneration},
+    any_components::{AnyCloneComponentSet, AnyComponentSet},
     fetch_resources::{FetchNone, FetchResources},
     join::{Index, IntoJoin, IntoJoinExt, Join, JoinIter, JoinIterUnconstrained, JoinParIter},
+    local_any_components::{
+        AnyCloneComponentSet as AnyLocalCloneComponentSet, AnyComponentSet as AnyLocalComponentSet,
+    },
     local_resource_set::{Read as LocalRead, ResourceSet as LocalResourceSet, Write as LocalWrite},
     local_world::{
         Entities as LocalEntities, ReadComponent as ReadLocalComponent,
