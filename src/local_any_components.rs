@@ -130,6 +130,17 @@ impl AnyCloneComponentSet {
             .map(|c| *c.into_any().downcast::<C>().ok().unwrap())
     }
 
+    /// Merges the given clone component set on top of this one.
+    ///
+    /// Returns true if any component in this set was overwritten by the merge.
+    pub fn merge(&mut self, other: AnyCloneComponentSet) -> bool {
+        let mut overwritten = false;
+        for (type_id, component) in other.components.into_iter() {
+            overwritten |= self.components.insert(type_id, component).is_some();
+        }
+        overwritten
+    }
+
     /// Insert all of the contained components into the given world.
     ///
     /// Returns true if any component in this set overwrote any existing component for the given
