@@ -186,6 +186,15 @@ impl Allocator {
         BitSetOr(&self.alive, &self.raised_atomic)
     }
 
+    /// Returns the maximum ever allocated entity index + 1.
+    ///
+    /// Since finding the actual live entity count is costly, this is a very cheap way of finding
+    /// out the approximate maximum number of entities ever allocated.
+    #[inline]
+    pub fn max_entity_count(&self) -> Index {
+        self.index_len.load(Ordering::Relaxed)
+    }
+
     /// Merge all atomic operations done since the last call to `Allocator::merge_atomic`.
     ///
     /// Atomically allocated entities become merged into the faster non-atomic BitSet, and entities
@@ -223,8 +232,8 @@ impl Allocator {
             .unwrap_or(Generation::zero())
     }
 
-    // Commit the changes to the length of the generation vector from the atomically adjusted
-    // index length.
+    // Commit the changes to the length of the generation vector from the atomically adjusted index
+    // length.
     fn update_generation_length(&mut self) {
         let index_len = *self.index_len.get_mut() as usize;
         if self.generations.len() < index_len {
@@ -359,8 +368,9 @@ impl AliveGeneration {
     }
 }
 
-// Increments `i` atomically without wrapping on overflow.  Resembles a `fetch_add(1,
-// Ordering::Relaxed)` with checked overflow, returning `None` instead.
+// Increments `i` atomically without wrapping on overflow.
+//
+// Resembles a `fetch_add(1, Ordering::Relaxed)` with checked overflow, returning `None` instead.
 fn atomic_increment(i: &AtomicIndex) -> Option<Index> {
     let mut prev = i.load(Ordering::Relaxed);
     while prev != MAX_INDEX {
@@ -372,8 +382,9 @@ fn atomic_increment(i: &AtomicIndex) -> Option<Index> {
     None
 }
 
-// Increments `i` atomically without wrapping on overflow.  Resembles a `fetch_sub(1,
-// Ordering::Relaxed)` with checked underflow, returning `None` instead.
+// Decrements `i` atomically without wrapping on underflow.
+//
+// Resembles a `fetch_sub(1, Ordering::Relaxed)` with checked underflow, returning `None` instead.
 fn atomic_decrement(i: &AtomicIndex) -> Option<Index> {
     let mut prev = i.load(Ordering::Relaxed);
     while prev != 0 {

@@ -237,6 +237,10 @@ impl<'a> Entities<'a> {
     pub fn live_bitset(&self) -> LiveBitSet {
         self.0.live_bitset()
     }
+
+    pub fn max_entity_count(&self) -> Index {
+        self.0.max_entity_count()
+    }
 }
 
 impl<'a> IntoJoin for &'a Entities<'a> {
