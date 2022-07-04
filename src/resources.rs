@@ -1,4 +1,4 @@
-use std::{collections::HashSet, hash::Hash};
+use std::{any::type_name, collections::HashSet, hash::Hash};
 
 use thiserror::Error;
 
@@ -15,6 +15,14 @@ pub trait Resources: Default {
 #[error("resource conflict in {type_name:?}")]
 pub struct ResourceConflict {
     pub type_name: &'static str,
+}
+
+impl ResourceConflict {
+    pub fn conflict_in<T>() -> Self {
+        Self {
+            type_name: type_name::<T>(),
+        }
+    }
 }
 
 /// A `Resources` implementation that describes R/W locks.

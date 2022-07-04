@@ -13,10 +13,10 @@ use crate::{
     join::{Index, IntoJoin},
     masked::{GuardedElement, GuardedJoin, ModifiedJoin, ModifiedJoinMut},
     resource_set::ResourceSet,
-    resources::{ResourceConflict, RwResources},
+    resources::ResourceConflict,
     storage::DenseStorage,
     tracked::{ModifiedBitSet, TrackedStorage},
-    world_common::{Component, ComponentId, ComponentStorage, ResourceId, WorldResourceId},
+    world_common::{Component, ComponentStorage, WorldResourceId, WorldResources},
 };
 
 #[derive(Default)]
@@ -257,10 +257,10 @@ impl<'a> IntoJoin for &'a Entities<'a> {
 }
 
 impl<'a> FetchResources<'a, World> for Entities<'a> {
-    type Resources = RwResources<WorldResourceId>;
+    type Resources = WorldResources;
 
-    fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::new().read(WorldResourceId::Entities))
+    fn check_resources() -> Result<WorldResources, ResourceConflict> {
+        Ok(WorldResources::new().read(WorldResourceId::Entities))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -300,10 +300,10 @@ impl<'a, R> FetchResources<'a, World> for ReadResource<'a, R>
 where
     R: Send + Sync + 'static,
 {
-    type Resources = RwResources<WorldResourceId>;
+    type Resources = WorldResources;
 
-    fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::new().read(WorldResourceId::Resource(ResourceId::of::<R>())))
+    fn check_resources() -> Result<WorldResources, ResourceConflict> {
+        Ok(WorldResources::new().read(WorldResourceId::resource::<R>()))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -321,10 +321,10 @@ impl<'a, R> FetchResources<'a, World> for WriteResource<'a, R>
 where
     R: Send + 'static,
 {
-    type Resources = RwResources<WorldResourceId>;
+    type Resources = WorldResources;
 
-    fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::new().write(WorldResourceId::Resource(ResourceId::of::<R>())))
+    fn check_resources() -> Result<WorldResources, ResourceConflict> {
+        Ok(WorldResources::new().write(WorldResourceId::resource::<R>()))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -542,12 +542,12 @@ where
     C: Component + Send + Sync + 'static,
     C::Storage: Send + Sync,
 {
-    type Resources = RwResources<WorldResourceId>;
+    type Resources = WorldResources;
 
-    fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::new()
+    fn check_resources() -> Result<WorldResources, ResourceConflict> {
+        Ok(WorldResources::new()
             .read(WorldResourceId::Entities)
-            .read(WorldResourceId::Component(ComponentId::of::<C>())))
+            .read(WorldResourceId::component::<C>()))
     }
 
     fn fetch(world: &'a World) -> Self {
@@ -566,12 +566,12 @@ where
     C: Component + Send + 'static,
     C::Storage: Send,
 {
-    type Resources = RwResources<WorldResourceId>;
+    type Resources = WorldResources;
 
-    fn check_resources() -> Result<RwResources<WorldResourceId>, ResourceConflict> {
-        Ok(RwResources::new()
+    fn check_resources() -> Result<WorldResources, ResourceConflict> {
+        Ok(WorldResources::new()
             .read(WorldResourceId::Entities)
-            .write(WorldResourceId::Component(ComponentId::of::<C>())))
+            .write(WorldResourceId::component::<C>()))
     }
 
     fn fetch(world: &'a World) -> Self {

@@ -1,4 +1,4 @@
-use std::{any::type_name, marker::PhantomData};
+use std::marker::PhantomData;
 
 use crate::resources::{ResourceConflict, Resources};
 
@@ -50,7 +50,7 @@ macro_rules! impl_data {
                 $({
                     let r = <$ty as FetchResources<ST>>::check_resources()?;
                     if resources.conflicts_with(&r) {
-                        return Err(ResourceConflict { type_name: type_name::<Self>() });
+                        return Err(ResourceConflict::conflict_in::<Self>());
                     }
                     resources.union(&r);
                 })*

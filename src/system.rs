@@ -1,4 +1,4 @@
-use std::{any::type_name, mem};
+use std::{convert::Infallible, mem};
 
 use crate::resources::{ResourceConflict, Resources};
 
@@ -19,6 +19,12 @@ pub trait Pool {
 /// multiple errors before stopping.
 pub trait Error {
     fn combine(self, other: Self) -> Self;
+}
+
+impl Error for Infallible {
+    fn combine(self, _other: Self) -> Self {
+        self
+    }
 }
 
 /// A system that may be run in parallel or in sequence with other such systems in a group.
@@ -92,9 +98,7 @@ where
         let hr = self.head.check_resources()?;
         let tr = self.tail.check_resources()?;
         if hr.conflicts_with(&tr) {
-            Err(ResourceConflict {
-                type_name: type_name::<Self>(),
-            })
+            Err(ResourceConflict::conflict_in::<Self>())
         } else {
             let mut resources = hr;
             resources.union(&tr);
@@ -194,9 +198,7 @@ where
         for s in &self.0 {
             let sr = s.check_resources()?;
             if sr.conflicts_with(&r) {
-                return Err(ResourceConflict {
-                    type_name: type_name::<Self>(),
-                });
+                return Err(ResourceConflict::conflict_in::<Self>());
             }
             r.union(&sr);
         }
@@ -263,11 +265,9 @@ where
 ///
 /// The parallelization is done eagerly and in order, the method tries to insert systems in order to
 /// run in parallel until a resource conflict is detected, then runs the systems determined not to
-/// conflict in parallel with each other and in sequence with the remaining systems.  The algorithm
+/// conflict in parallel with each other and in sequence with the remaining systems. The algorithm
 /// then repeats this process with the remaining systems until there are no more systems remaining.
-pub fn parallelize<A, S>(
-    systems: impl IntoIterator<Item = S>,
-) -> Result<SeqList<ParList<S>>, ResourceConflict>
+pub fn parallelize<A, S>(systems: impl IntoIterator<Item = S>) -> SeqList<ParList<S>>
 where
     A: Copy + Send + 'static,
     S: System<A> + Send + 'static,
@@ -280,22 +280,33 @@ where
     let mut par_resources = S::Resources::default();
 
     for system in systems {
-        let sys_resources = system.check_resources()?;
-        if sys_resources.conflicts_with(&par_resources) {
-            assert!(par.len() != 0);
-            seq.push(ParList(mem::take(&mut par)));
-            par_resources = S::Resources::default();
-        }
+        if let Ok(sys_resources) = system.check_resources() {
+            if par_resources.conflicts_with(&sys_resources) {
+                assert!(!par.is_empty());
+                seq.push(ParList(mem::take(&mut par)));
+                par_resources = S::Resources::default();
+            }
 
-        par_resources.union(&sys_resources);
-        par.push(system);
+            par_resources.union(&sys_resources);
+            par.push(system);
+        } else {
+            // If we have been given a system with an internal resource conflict, just assume that
+            // the system conflicts with everything. A call to `System::check_resources()` on the
+            // returned system will show the internal conflict. This matches the pattern of other
+            // system combinators where resource conflicts are checked after final construction.
+            if !par.is_empty() {
+                seq.push(ParList(mem::take(&mut par)));
+                par_resources = S::Resources::default();
+            }
+            seq.push(ParList(vec![system]));
+        }
     }
 
     if !par.is_empty() {
         seq.push(ParList(par));
     }
 
-    Ok(SeqList(seq))
+    SeqList(seq)
 }
 
 /// A basic system runner that runs all systems sequentially in the current thread.
