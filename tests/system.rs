@@ -115,18 +115,18 @@ fn test_parallelize() {
     let (a_sender, a_receiver) = mpsc::channel();
     let (b_sender, b_receiver) = mpsc::channel();
 
-    parallelize([
+    let mut systems = parallelize([
         TestSystem("A", 1, a_sender.clone()),
         TestSystem("B", 1, b_sender.clone()),
         TestSystem("B", 2, b_sender.clone()),
         TestSystem("B", 3, b_sender.clone()),
         TestSystem("A", 2, a_sender.clone()),
         TestSystem("A", 3, a_sender.clone()),
-    ])
-    .unwrap()
-    .run(&SeqPool, ())
-    .unwrap();
+    ]);
+    systems.check_resources().unwrap();
+    systems.run(&SeqPool, ()).unwrap();
 
+    drop(systems);
     drop(a_sender);
     drop(b_sender);
 
