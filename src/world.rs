@@ -62,6 +62,15 @@ impl World {
         self.resources.insert(r)
     }
 
+    pub fn ensure_resource<R>(&mut self)
+    where
+        R: Default + Send + 'static,
+    {
+        if !self.contains_resource::<R>() {
+            self.insert_resource::<R>(R::default());
+        }
+    }
+
     pub fn remove_resource<R>(&mut self) -> Option<R>
     where
         R: Send + 'static,
@@ -125,6 +134,16 @@ impl World {
             }),
         );
         self.components.insert(ComponentStorage::<C>::default())
+    }
+
+    pub fn ensure_component<C>(&mut self)
+    where
+        C: Component + 'static,
+        C::Storage: Default + Send,
+    {
+        if !self.contains_component::<C>() {
+            self.insert_component::<C>();
+        }
     }
 
     /// Remove storage for the given component.
