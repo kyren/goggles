@@ -371,16 +371,12 @@ where
     C: Component,
     R: Deref<Target = ComponentStorage<C>>,
 {
-    pub fn entities(&self) -> &Entities {
-        &self.entities
+    pub fn storage(&self) -> &ComponentStorage<C> {
+        &self.storage
     }
 
     pub fn mask(&self) -> &BitSet {
         self.storage.mask()
-    }
-
-    pub fn storage(&self) -> &ComponentStorage<C> {
-        &self.storage
     }
 
     pub fn contains(&self, e: Entity) -> bool {
