@@ -5,6 +5,7 @@ use std::{
 };
 
 use atomic_refcell::{AtomicRef, AtomicRefMut};
+use hibitset::BitSet;
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -372,6 +373,10 @@ where
 {
     pub fn entities(&self) -> &Entities {
         &self.entities
+    }
+
+    pub fn mask(&self) -> &BitSet {
+        self.storage.mask()
     }
 
     pub fn storage(&self) -> &ComponentStorage<C> {
