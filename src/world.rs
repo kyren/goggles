@@ -63,13 +63,6 @@ impl World {
         self.resources.insert(r)
     }
 
-    pub fn ensure_resource<R>(&mut self) -> &mut R
-    where
-        R: Default + Send + 'static,
-    {
-        self.resources.ensure::<R>()
-    }
-
     pub fn remove_resource<R>(&mut self) -> Option<R>
     where
         R: Send + 'static,
@@ -133,18 +126,6 @@ impl World {
             }),
         );
         self.components.insert(ComponentStorage::<C>::default())
-    }
-
-    pub fn ensure_component<C>(&mut self) -> ComponentAccess<C, &mut ComponentStorage<C>>
-    where
-        C: Component + 'static,
-        C::Storage: Default + Send,
-    {
-        ComponentAccess {
-            storage: self.components.ensure::<ComponentStorage<C>>(),
-            entities: Entities(&self.allocator),
-            marker: PhantomData,
-        }
     }
 
     /// Remove storage for the given component.

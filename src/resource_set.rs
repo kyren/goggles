@@ -41,22 +41,6 @@ impl ResourceSet {
             .map(|r| r.into_inner().into_inner())
     }
 
-    pub fn ensure<T>(&mut self) -> &mut T
-    where
-        T: Default + Send + 'static,
-    {
-        // Redundant if due to https://github.com/rust-lang/rust/issues/21906
-        if !self.resources.contains::<Resource<T>>() {
-            self.resources
-                .insert::<Resource<T>>(AtomicRefCell::new(MakeSync::new(T::default())));
-        }
-        self.resources
-            .get_mut::<Resource<T>>()
-            .unwrap()
-            .get_mut()
-            .get_mut()
-    }
-
     pub fn remove<T>(&mut self) -> Option<T>
     where
         T: Send + 'static,
