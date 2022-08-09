@@ -21,6 +21,14 @@ impl AnyComponentSet {
         Self::default()
     }
 
+    pub fn contains<C>(&self) -> bool
+    where
+        C: Component + Clone + Send + Sync + 'static,
+        C::Storage: Send,
+    {
+        self.components.contains_key(&TypeId::of::<C>())
+    }
+
     pub fn get<C>(&self) -> Option<&C>
     where
         C: Component + Send + Sync + 'static,
@@ -105,6 +113,14 @@ pub struct AnyCloneComponentSet {
 impl AnyCloneComponentSet {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn contains<C>(&self) -> bool
+    where
+        C: Component + Clone + Send + Sync + 'static,
+        C::Storage: Send,
+    {
+        self.components.contains_key(&TypeId::of::<C>())
     }
 
     pub fn get<C>(&self) -> Option<&C>

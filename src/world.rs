@@ -63,13 +63,11 @@ impl World {
         self.resources.insert(r)
     }
 
-    pub fn ensure_resource<R>(&mut self)
+    pub fn ensure_resource<R>(&mut self) -> &mut R
     where
         R: Default + Send + 'static,
     {
-        if !self.contains_resource::<R>() {
-            self.insert_resource::<R>(R::default());
-        }
+        self.resources.ensure::<R>()
     }
 
     pub fn remove_resource<R>(&mut self) -> Option<R>
@@ -137,13 +135,15 @@ impl World {
         self.components.insert(ComponentStorage::<C>::default())
     }
 
-    pub fn ensure_component<C>(&mut self)
+    pub fn ensure_component<C>(&mut self) -> ComponentAccess<C, &mut ComponentStorage<C>>
     where
         C: Component + 'static,
         C::Storage: Default + Send,
     {
-        if !self.contains_component::<C>() {
-            self.insert_component::<C>();
+        ComponentAccess {
+            storage: self.components.ensure::<ComponentStorage<C>>(),
+            entities: Entities(&self.allocator),
+            marker: PhantomData,
         }
     }
 
@@ -433,6 +433,13 @@ where
         } else {
             Err(WrongGeneration)
         }
+    }
+
+    pub fn get_or_default(&mut self, e: Entity) -> Result<&mut C, WrongGeneration>
+    where
+        C: Default,
+    {
+        self.get_or_insert_with(e, Default::default)
     }
 
     pub fn insert(&mut self, e: Entity, c: C) -> Result<Option<C>, WrongGeneration> {
