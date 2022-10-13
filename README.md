@@ -4,7 +4,7 @@
 
 ---
 
-[![Build Status](https://img.shields.io/circleci/project/github/kyren/goggles.svg)](https://circleci.com/gh/kyren/goggles)
+[![Build Status](https://img.shields.io/circleci/project/github/triplehex/goggles.svg)](https://circleci.com/gh/triplehex/goggles)
 [![Latest Version](https://img.shields.io/crates/v/goggles.svg)](https://crates.io/crates/goggles)
 [![API Documentation](https://docs.rs/goggles/badge.svg)](https://docs.rs/goggles)
 
